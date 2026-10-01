@@ -1,0 +1,29 @@
+{
+  "name": "affix",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "npm run start -w @affix/web",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:generate": "npm run generate -w @affix/db",
+    "db:migrate": "npm run migrate -w @affix/db",
+    "db:studio": "npm run studio -w @affix/db",
+    "db:seed": "npm run seed -w @affix/auth",
+    "setup": "npm run db:up && npm run db:migrate && npm run db:seed"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^11.0.0",
+    "turbo": "^2.11.5"
+  }
+}

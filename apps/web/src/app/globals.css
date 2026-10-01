@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+/* ----------------------------------------------------------------------------
+   Affix design system
+   Layout concept: editorial fintech. Cinematic creator photography framed
+   inside the page, big round-geometric headlines, precise money UI, and fine
+   guilloche linework (the banknote motif) as the recurring texture.
+   One deliberate visual world (not auto dark mode): paper sections alternate
+   with deep forest sections.
+---------------------------------------------------------------------------- */
+
+@theme inline {
+  /* Forest ramp, anchored on the logo ink #0e2a1e */
+  --color-forest-950: #06130c;
+  --color-forest-900: #0a1d14;
+  --color-forest-800: #0e2a1e; /* logo ink */
+  --color-forest-700: #143726;
+  --color-forest-600: #1c4a34;
+  --color-ink: #0e2a1e;
+
+  /* Greens: logo leaf + luminous action green */
+  --color-leaf: #5dbd76; /* logo green */
+  --color-leaf-700: #23784a; /* green text on paper (5:1) */
+  --color-spring: #7defa1; /* primary action, "money arrived" */
+  --color-spring-300: #b4f6c8;
+
+  /* Neutrals, biased toward the green hue */
+  --color-paper: #f3f5f0; /* page */
+  --color-paper-2: #e8ede5; /* alt section */
+  --color-card: #ffffff;
+  --color-line: rgb(14 42 30 / 0.1);
+  --color-muted: #54655b; /* secondary text on paper */
+  --color-muted-2: #86958c; /* tertiary / captions */
+  --color-cream: #eef3ea; /* text on forest */
+
+  /* Money-split categorical palette (validated, dataviz skill) */
+  --color-split-vendor: #1b7f4e;
+  --color-split-affiliate: #e0a030;
+  --color-split-fee: #5578c2;
+  --color-split-vat: #d0634a;
+  --color-split-vendor-dk: #2e9c63;
+  --color-split-affiliate-dk: #bc8628;
+  --color-split-fee-dk: #6a8fd6;
+  --color-split-vat-dk: #cf6a50;
+
+  /* Type */
+  --font-display: var(--font-parkinsans);
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+
+  /* Motion */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--color-spring);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-leaf);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display), var(--font-sans), sans-serif;
+    font-feature-settings: "ss01" on;
+  }
+
+  /* Headline tracking scales with size */
+  .tracking-display {
+    letter-spacing: -0.045em;
+  }
+  .tracking-heading {
+    letter-spacing: -0.03em;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .container-affix {
+    width: 100%;
+    max-width: 80rem;
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2.5rem);
+  }
+
+  /* Uppercase micro label used for eyebrows and UI captions */
+  .label-mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* Frosted panel for UI floating over photography */
+  .glass {
+    background: rgb(255 255 255 / 0.1);
+    border: 1px solid rgb(255 255 255 / 0.18);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  /* Floating product-UI card on photography */
+  .ui-card {
+    background: rgb(255 255 255 / 0.94);
+    border: 1px solid rgb(255 255 255 / 0.6);
+    box-shadow:
+      0 1px 1px rgb(6 19 12 / 0.06),
+      0 24px 48px -20px rgb(6 19 12 / 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Hairline hatch used to mark the VAT share (texture, not color alone) */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgb(255 255 255 / 0.28) 0 2px,
+      transparent 2px 6px
+    );
+  }
+
+  /* Subtle film grain over dark sections */
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+}
+
+/* Horizontal marquee (marketplace rows, payment strip) */
+@keyframes affix-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: affix-marquee var(--marquee-duration, 60s) linear infinite;
+}
+.animate-marquee-reverse {
+  animation: affix-marquee var(--marquee-duration, 60s) linear infinite reverse;
+}
+.marquee-pause:hover .animate-marquee,
+.marquee-pause:hover .animate-marquee-reverse {
+  animation-play-state: paused;
+}
+
+/* Slow rotation for guilloche rosettes */
+@keyframes affix-rotate {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.animate-rotate-slow {
+  animation: affix-rotate 180s linear infinite;
+}
+
+/* Live dot */
+@keyframes affix-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(125 239 161 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(125 239 161 / 0);
+  }
+}
+.live-dot {
+  animation: affix-pulse 1.8s ease-out infinite;
+}
+
+/* Range inputs (pricing calculator) */
+input[type="range"].range-affix {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"].range-affix::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-ink) 0 var(--fill, 50%),
+    rgb(14 42 30 / 0.12) var(--fill, 50%) 100%
+  );
+}
+input[type="range"].range-affix::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(14 42 30 / 0.12);
+}
+input[type="range"].range-affix::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-ink);
+}
+input[type="range"].range-affix::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -9px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--color-spring);
+  border: 3px solid var(--color-ink);
+  box-shadow: 0 4px 12px rgb(14 42 30 / 0.25);
+}
+input[type="range"].range-affix::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-spring);
+  border: 3px solid var(--color-ink);
+}
+
+/* Lenis smooth-scroll required styles */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-marquee-reverse,
+  .animate-rotate-slow,
+  .live-dot {
+    animation: none;
+  }
+}

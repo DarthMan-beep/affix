@@ -1,0 +1,25 @@
+{
+  "name": "@affix/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "generate": "dotenv -e ../../.env -- drizzle-kit generate",
+    "migrate": "dotenv -e ../../.env -- drizzle-kit migrate",
+    "studio": "dotenv -e ../../.env -- drizzle-kit studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.3",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^5"
+  }
+}

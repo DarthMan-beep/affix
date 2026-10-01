@@ -1,0 +1,25 @@
+{
+  "name": "@affix/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./permissions": "./src/permissions.ts"
+  },
+  "scripts": {
+    "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "test": "tsx --test src/permissions.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@affix/db": "*",
+    "@better-auth/drizzle-adapter": "^1.7.6",
+    "better-auth": "^1.7.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}
