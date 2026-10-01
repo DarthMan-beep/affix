@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { COUNTRY_CODES } from "./money";
+import { CATEGORIES, PRODUCT_IMAGES } from "./product-options";
 
 const email = z
   .string()
@@ -48,3 +50,80 @@ export function safeNext(next: string | null | undefined, fallback = "/dashboard
   }
   return next;
 }
+
+/* ---------------------------------------------------------------- products */
+
+const AMOUNT = /^\d{1,6}([.,]\d{1,2})?$/;
+
+/** "49", "49.9" or "49,90" → cents. Returns null when it isn't an amount. */
+export function parseEuros(value: string): number | null {
+  const v = value.trim();
+  if (!AMOUNT.test(v)) return null;
+  return Math.round(Number.parseFloat(v.replace(",", ".")) * 100);
+}
+
+const wholeNumber = (min: number, max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .regex(/^\d{1,3}$/, { error: message })
+    .transform(Number)
+    .refine((n) => n >= min && n <= max, { error: message });
+
+export const productSchema = z
+  .object({
+    title: z.string().trim().min(3, { error: "Give the product a title." }).max(80, { error: "Use at most 80 characters." }),
+    category: z.enum(CATEGORIES, { error: "Choose a category." }),
+    description: z.string().trim().max(2000, { error: "Use at most 2,000 characters." }),
+    price: z.string().trim(),
+    commissionType: z.enum(["percent", "fixed"], { error: "Choose how affiliates are paid." }),
+    commissionPercent: z.string().trim(),
+    commissionFixed: z.string().trim(),
+    cookieDays: wholeNumber(1, 90, "Choose between 1 and 90 days."),
+    refundDays: wholeNumber(0, 90, "Choose between 0 and 90 days."),
+    image: z.union([z.enum(PRODUCT_IMAGES), z.literal("")]),
+    intent: z.enum(["draft", "publish"]),
+  })
+  .superRefine((v, ctx) => {
+    const price = parseEuros(v.price);
+    if (price === null || price < 100 || price > 10_000_00) {
+      ctx.addIssue({ code: "custom", path: ["price"], message: "Enter a price between €1 and €10,000." });
+    }
+    if (v.commissionType === "percent") {
+      const pct = Number(v.commissionPercent.replace(",", "."));
+      if (v.commissionPercent === "" || !Number.isFinite(pct) || pct < 0 || pct > 90) {
+        ctx.addIssue({ code: "custom", path: ["commissionPercent"], message: "Enter a percentage from 0 to 90." });
+      }
+    } else if (parseEuros(v.commissionFixed) === null) {
+      ctx.addIssue({ code: "custom", path: ["commissionFixed"], message: "Enter an amount like 20 or 19.50." });
+    }
+  });
+
+/* ---------------------------------------------------------------- checkout */
+
+export const checkoutSchema = z.object({
+  slug: z.string().min(1),
+  name: z.string().trim().min(2, { error: "Enter your name." }).max(80),
+  email,
+  country: z.enum(COUNTRY_CODES, { error: "Choose your country." }),
+});
+
+/* ----------------------------------------------------------------- payouts */
+
+const IBAN = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
+
+export const payoutMethodSchema = z
+  .object({
+    type: z.enum(["bank", "paypal", "wise"], { error: "Choose a payout method." }),
+    holder: z.string().trim().min(2, { error: "Enter the account holder's name." }).max(80),
+    details: z.string().trim().min(1, { error: "This field is required." }).max(120),
+  })
+  .superRefine((v, ctx) => {
+    if (v.type === "bank") {
+      if (!IBAN.test(v.details.replace(/\s+/g, "").toUpperCase())) {
+        ctx.addIssue({ code: "custom", path: ["details"], message: "Enter a valid IBAN, e.g. DE00 0000 0000 0000 0000 00." });
+      }
+    } else if (!z.email().safeParse(v.details.toLowerCase()).success) {
+      ctx.addIssue({ code: "custom", path: ["details"], message: "Enter the email address of the account." });
+    }
+  });

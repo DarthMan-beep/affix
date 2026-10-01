@@ -8,7 +8,7 @@ An npm-workspaces monorepo run with [Turborepo](https://turborepo.com).
 
 ```
 apps/
-  web/            Next.js 16 app: landing page, sign-in/up, dashboard
+  web/            Next.js 16 app: landing page, sign-in/up, dashboard, product pages, checkout
 packages/
   db/             Postgres schema (Drizzle ORM), client, migrations
   auth/           Better Auth config, permission rules, seed script
@@ -53,7 +53,7 @@ Emails (verification, password reset) are printed in the terminal running `npm r
 | `npm run db:down`     | Stop Postgres (data is kept in a Docker volume)        |
 | `npm run db:generate` | Create a migration after changing the schema           |
 | `npm run db:migrate`  | Apply pending migrations                               |
-| `npm run db:seed`     | Add demo accounts, products and links (safe to re-run) |
+| `npm run db:seed`     | Add demo accounts, products, links and sales (safe to re-run) |
 | `npm run db:studio`   | Browse the database in Drizzle Studio                  |
 
 ## Authentication and authorization
@@ -62,6 +62,18 @@ Emails (verification, password reset) are printed in the terminal running `npm r
 - **Roles**: one account can be a vendor, an affiliate, or both. Each capability is a profile row (`vendor`, `affiliate`); platform staff have the `admin` role.
 - **Rules**: every permission is a pure function in `packages/auth/src/permissions.ts`, unit-tested in `permissions.test.ts`. Example: affiliates can't promote their own products.
 - **Enforcement**: `apps/web/src/proxy.ts` only redirects visitors without a session cookie. The real checks happen on the server in `apps/web/src/lib/dal.ts` and `lib/data.ts`, which every page and Server Action goes through.
+
+## How a sale flows
+
+Payments and payouts are simulated: no card is charged and no money is transferred.
+
+1. **Link**: an affiliate copies a smart link. It is shown as `affix.to/<handle>/<product>` and served locally at `/go/<handle>/<product>` (`apps/web/src/app/go`). Add `?s=instagram-bio` to tag a campaign.
+2. **Click**: the link stores a `click` row (device, browser, referrer, hashed IP), sets the first-party `affix_vid` cookie and redirects to the product page `/p/<product>`.
+3. **Checkout**: `/checkout/<product>` creates an `order` with the full split in cents (VAT, Affix fee, affiliate, vendor; `apps/web/src/lib/money.ts`). The sale goes to the last link that visitor clicked for that product within the product's cookie duration. Buying through your own link earns nothing.
+4. **Commission**: a `commission` row is pending for the product's refund window, then approved.
+5. **Payout**: once €50 is available, the affiliate requests a `payout` to a saved payout method (Promoting → Payouts). An admin marks it as sent, then completed (Admin → Payouts).
+
+Vendors create and edit products under Selling → New product, and see every order and its split under Selling → Orders.
 
 ## Changing the database
 

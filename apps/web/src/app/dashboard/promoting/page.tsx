@@ -2,7 +2,10 @@ import Image from "next/image";
 import { Link2, Info } from "lucide-react";
 import { requireActor } from "@/lib/dal";
 import { getPromoting } from "@/lib/data";
-import { PageHeader, Stat, formatCents, formatNumber, percent } from "@/components/dashboard/ui";
+import { promotingNav } from "@/lib/dashboard-nav";
+import { commissionLabel } from "@/lib/money";
+import { PageHeader, Stat, formatCents, formatNumber } from "@/components/dashboard/ui";
+import { SubNav } from "@/components/dashboard/subnav";
 import { WorkspaceLocked } from "@/components/dashboard/workspace";
 import { createLink } from "../actions";
 import { CopyLink } from "./copy-link";
@@ -30,6 +33,8 @@ export default async function PromotingPage() {
         title="Your links"
         description="Share a link anywhere. Every sale it brings in pays you within seconds."
       />
+
+      <SubNav label="Promoting" items={promotingNav} />
 
       <dl className="grid grid-cols-3 gap-3">
         <Stat label="Links" value={formatNumber(links.length)} />
@@ -71,7 +76,7 @@ export default async function PromotingPage() {
                   <td className="max-w-[16rem] px-4 py-4">
                     <CopyLink code={l.code} />
                   </td>
-                  <td className="font-mono tabular px-4 py-4 text-right text-leaf-700">{percent(l.commissionBps)}</td>
+                  <td className="font-mono tabular px-4 py-4 text-right text-leaf-700">{commissionLabel(l)}</td>
                   <td className="font-mono tabular px-6 py-4 text-right">{formatNumber(l.clicks)}</td>
                 </tr>
               ))}
@@ -107,7 +112,7 @@ export default async function PromotingPage() {
                   </p>
                   <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
                     <p className="text-[0.8rem] text-muted">
-                      <span className="font-mono font-semibold text-leaf-700">{percent(p.commissionBps)}</span> commission
+                      <span className="font-mono font-semibold text-leaf-700">{commissionLabel(p)}</span> commission
                     </p>
                     <form action={createLink.bind(null, p.id)}>
                       <button

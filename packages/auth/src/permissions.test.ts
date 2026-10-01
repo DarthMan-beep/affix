@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { can, parseRoles, type Actor } from "./permissions";
+import { MIN_PAYOUT_CENTS, can, isSelfReferral, parseRoles, type Actor } from "./permissions";
 
 const base: Actor = {
   userId: "u1",
@@ -65,5 +65,39 @@ describe("resource rules", () => {
     assert.equal(can.manageLink(affiliate, { affiliateId: "a1" }), true);
     assert.equal(can.manageLink(affiliate, { affiliateId: "a2" }), false);
     assert.equal(can.manageLink(admin, { affiliateId: "a2" }), true);
+  });
+});
+
+describe("payouts", () => {
+  const enough = { availableCents: MIN_PAYOUT_CENTS, hasMethod: true };
+
+  it("payout methods belong to one affiliate; not even admins manage them", () => {
+    assert.equal(can.managePayoutMethod(affiliate, { affiliateId: "a1" }), true);
+    assert.equal(can.managePayoutMethod(affiliate, { affiliateId: "a2" }), false);
+    assert.equal(can.managePayoutMethod(admin, { affiliateId: "a1" }), false);
+  });
+  it("a payout needs an affiliate, a verified email, a method and the minimum balance", () => {
+    assert.equal(can.requestPayout(affiliate, enough), true);
+    assert.equal(can.requestPayout(vendor, enough), false, "not an affiliate");
+    assert.equal(can.requestPayout({ ...affiliate, emailVerified: false }, enough), false);
+    assert.equal(can.requestPayout(affiliate, { ...enough, hasMethod: false }), false);
+    assert.equal(can.requestPayout(affiliate, { ...enough, availableCents: MIN_PAYOUT_CENTS - 1 }), false);
+  });
+  it("only admins process payouts", () => {
+    assert.equal(can.processPayouts(affiliate), false);
+    assert.equal(can.processPayouts(admin), true);
+  });
+});
+
+describe("self-referrals", () => {
+  const owner = { userId: "u1", email: "maya@affix.dev" };
+
+  it("the same account or the same email earns no commission", () => {
+    assert.equal(isSelfReferral(owner, { userId: "u1", email: "other@example.com" }), true);
+    assert.equal(isSelfReferral(owner, { userId: null, email: " Maya@Affix.dev " }), true);
+  });
+  it("anyone else is a real sale", () => {
+    assert.equal(isSelfReferral(owner, { userId: "u2", email: "buyer@example.com" }), false);
+    assert.equal(isSelfReferral(owner, { userId: null, email: "buyer@example.com" }), false);
   });
 });

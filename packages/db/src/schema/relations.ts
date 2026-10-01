@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { account, session, user } from "./auth";
+import { click, commission, order, payout, payoutMethod } from "./commerce";
 import { affiliate, affiliateLink, product, vendor } from "./marketplace";
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -25,14 +26,49 @@ export const vendorRelations = relations(vendor, ({ one, many }) => ({
 export const affiliateRelations = relations(affiliate, ({ one, many }) => ({
   user: one(user, { fields: [affiliate.userId], references: [user.id] }),
   links: many(affiliateLink),
+  commissions: many(commission),
+  payoutMethods: many(payoutMethod),
+  payouts: many(payout),
 }));
 
 export const productRelations = relations(product, ({ one, many }) => ({
   vendor: one(vendor, { fields: [product.vendorId], references: [vendor.id] }),
   links: many(affiliateLink),
+  orders: many(order),
 }));
 
-export const affiliateLinkRelations = relations(affiliateLink, ({ one }) => ({
+export const affiliateLinkRelations = relations(affiliateLink, ({ one, many }) => ({
   affiliate: one(affiliate, { fields: [affiliateLink.affiliateId], references: [affiliate.id] }),
   product: one(product, { fields: [affiliateLink.productId], references: [product.id] }),
+  clickLog: many(click),
+}));
+
+export const clickRelations = relations(click, ({ one }) => ({
+  link: one(affiliateLink, { fields: [click.linkId], references: [affiliateLink.id] }),
+  affiliate: one(affiliate, { fields: [click.affiliateId], references: [affiliate.id] }),
+  product: one(product, { fields: [click.productId], references: [product.id] }),
+}));
+
+export const orderRelations = relations(order, ({ one }) => ({
+  product: one(product, { fields: [order.productId], references: [product.id] }),
+  vendor: one(vendor, { fields: [order.vendorId], references: [vendor.id] }),
+  affiliate: one(affiliate, { fields: [order.affiliateId], references: [affiliate.id] }),
+  click: one(click, { fields: [order.clickId], references: [click.id] }),
+  commission: one(commission),
+}));
+
+export const commissionRelations = relations(commission, ({ one }) => ({
+  order: one(order, { fields: [commission.orderId], references: [order.id] }),
+  affiliate: one(affiliate, { fields: [commission.affiliateId], references: [affiliate.id] }),
+  product: one(product, { fields: [commission.productId], references: [product.id] }),
+  payout: one(payout, { fields: [commission.payoutId], references: [payout.id] }),
+}));
+
+export const payoutMethodRelations = relations(payoutMethod, ({ one }) => ({
+  affiliate: one(affiliate, { fields: [payoutMethod.affiliateId], references: [affiliate.id] }),
+}));
+
+export const payoutRelations = relations(payout, ({ one, many }) => ({
+  affiliate: one(affiliate, { fields: [payout.affiliateId], references: [affiliate.id] }),
+  commissions: many(commission),
 }));

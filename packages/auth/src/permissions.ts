@@ -38,6 +38,24 @@ export const isAffiliate = (a: Actor) => a.affiliate !== null;
 
 type ProductRef = { vendorId: string; status: "draft" | "published" | "archived" };
 type LinkRef = { affiliateId: string };
+type PayoutMethodRef = { affiliateId: string };
+
+/** Smallest balance that can be withdrawn: €50. */
+export const MIN_PAYOUT_CENTS = 50_00;
+
+/**
+ * A sale earns no commission when the buyer is the affiliate behind the link
+ * (same account, or the same email at a guest checkout).
+ */
+export function isSelfReferral(
+  linkOwner: { userId: string; email: string },
+  buyer: { userId: string | null; email: string },
+) {
+  return (
+    linkOwner.userId === buyer.userId ||
+    linkOwner.email.trim().toLowerCase() === buyer.email.trim().toLowerCase()
+  );
+}
 
 export const can = {
   /** Staff-only area. */
@@ -60,4 +78,17 @@ export const can = {
 
   /** Affiliate links: the owner (and admins) manage them. */
   manageLink: (a: Actor, l: LinkRef) => isAdmin(a) || a.affiliate?.id === l.affiliateId,
+
+  /** Payout methods hold bank details: only the affiliate they belong to. */
+  managePayoutMethod: (a: Actor, m: PayoutMethodRef) => a.affiliate?.id === m.affiliateId,
+
+  /**
+   * Withdraw the available balance: affiliates with a verified email, a saved
+   * payout method, and at least the minimum payout available.
+   */
+  requestPayout: (a: Actor, b: { availableCents: number; hasMethod: boolean }) =>
+    isAffiliate(a) && a.emailVerified && b.hasMethod && b.availableCents >= MIN_PAYOUT_CENTS,
+
+  /** Sending, completing and rejecting payouts is staff work. */
+  processPayouts: (a: Actor) => isAdmin(a),
 } as const;

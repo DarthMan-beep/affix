@@ -28,7 +28,9 @@ export async function getSelling(actor: Actor) {
       category: product.category,
       imageUrl: product.imageUrl,
       priceCents: product.priceCents,
+      commissionType: product.commissionType,
       commissionBps: product.commissionBps,
+      commissionFixedCents: product.commissionFixedCents,
       status: product.status,
       affiliates: sql<number>`count(${affiliateLink.id})::int`,
       clicks: sql<number>`coalesce(sum(${affiliateLink.clicks}), 0)::int`,
@@ -38,6 +40,32 @@ export async function getSelling(actor: Actor) {
     .where(eq(product.vendorId, actor.vendor.id))
     .groupBy(product.id)
     .orderBy(desc(product.createdAt));
+}
+
+/** One product with everything the editor needs; null if it isn't the actor's to manage. */
+export async function getProductForEdit(actor: Actor, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const row = await db.query.product.findFirst({
+    where: eq(product.id, id),
+    columns: {
+      id: true,
+      vendorId: true,
+      slug: true,
+      title: true,
+      description: true,
+      category: true,
+      priceCents: true,
+      commissionType: true,
+      commissionBps: true,
+      commissionFixedCents: true,
+      cookieDays: true,
+      refundDays: true,
+      imageUrl: true,
+      status: true,
+    },
+  });
+  if (!row || !can.manageProduct(actor, row)) return null;
+  return row;
 }
 
 export async function getPromoting(actor: Actor) {
@@ -52,7 +80,9 @@ export async function getPromoting(actor: Actor) {
       productTitle: product.title,
       imageUrl: product.imageUrl,
       priceCents: product.priceCents,
+      commissionType: product.commissionType,
       commissionBps: product.commissionBps,
+      commissionFixedCents: product.commissionFixedCents,
       vendorName: vendor.displayName,
     })
     .from(affiliateLink)
@@ -68,7 +98,9 @@ export async function getPromoting(actor: Actor) {
       category: product.category,
       imageUrl: product.imageUrl,
       priceCents: product.priceCents,
+      commissionType: product.commissionType,
       commissionBps: product.commissionBps,
+      commissionFixedCents: product.commissionFixedCents,
       status: product.status,
       vendorId: product.vendorId,
       vendorName: vendor.displayName,

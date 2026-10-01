@@ -1,12 +1,28 @@
 import Image from "next/image";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { requireActor } from "@/lib/dal";
 import { getSelling } from "@/lib/data";
-import { Chip, PageHeader, Stat, formatCents, formatNumber, percent } from "@/components/dashboard/ui";
+import { sellingNav } from "@/lib/dashboard-nav";
+import { commissionLabel } from "@/lib/money";
+import { Chip, Notice, PageHeader, Stat, formatCents, formatNumber } from "@/components/dashboard/ui";
+import { SubNav } from "@/components/dashboard/subnav";
 import { WorkspaceLocked } from "@/components/dashboard/workspace";
 
-export default async function SellingPage() {
+const savedNotice: Record<string, string> = {
+  published: "Product saved and published.",
+  draft: "Product saved as a draft. Publish it when you're ready.",
+  archived: "Product archived. It left the marketplace and its links stopped tracking.",
+};
+
+export default async function SellingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
   const actor = await requireActor("/dashboard/selling");
   const products = await getSelling(actor);
+  const { saved } = await searchParams;
 
   if (!products) {
     return (
@@ -26,7 +42,19 @@ export default async function SellingPage() {
         eyebrow={`Selling · /${actor.vendor!.slug}`}
         title="Your products"
         description="What you sell, what affiliates earn on it, and how much traffic they send."
+        action={
+          <Link
+            href="/dashboard/selling/new"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-ink px-5 text-[0.9rem] font-semibold text-cream transition-colors hover:bg-forest-700"
+          >
+            <Plus size={16} /> New product
+          </Link>
+        }
       />
+
+      <SubNav label="Selling" items={sellingNav} />
+
+      {saved && savedNotice[saved] && <Notice tone="success" title={savedNotice[saved]} />}
 
       <dl className="grid grid-cols-3 gap-3">
         <Stat label="Products" value={formatNumber(products.length)} />
@@ -36,7 +64,7 @@ export default async function SellingPage() {
 
       {products.length === 0 ? (
         <p className="rounded-[24px] bg-card px-6 py-12 text-center text-muted ring-1 ring-line">
-          No products yet. The product editor arrives with checkout in the next phase.
+          No products yet. Add your first one with &ldquo;New product&rdquo;.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-[24px] bg-card ring-1 ring-line">
@@ -60,13 +88,15 @@ export default async function SellingPage() {
                         {p.imageUrl && <Image src={p.imageUrl} alt="" fill sizes="44px" className="object-cover" />}
                       </span>
                       <span>
-                        <span className="block font-semibold text-ink">{p.title}</span>
+                        <Link href={`/dashboard/selling/${p.id}`} className="block font-semibold text-ink hover:text-leaf-700">
+                          {p.title}
+                        </Link>
                         <span className="block text-[0.8rem] text-muted">{p.category}</span>
                       </span>
                     </div>
                   </td>
                   <td className="font-mono tabular px-4 py-4 text-right">{formatCents(p.priceCents)}</td>
-                  <td className="font-mono tabular px-4 py-4 text-right text-leaf-700">{percent(p.commissionBps)}</td>
+                  <td className="font-mono tabular px-4 py-4 text-right text-leaf-700">{commissionLabel(p)}</td>
                   <td className="font-mono tabular px-4 py-4 text-right">{formatNumber(p.affiliates)}</td>
                   <td className="font-mono tabular px-4 py-4 text-right">{formatNumber(p.clicks)}</td>
                   <td className="px-6 py-4">

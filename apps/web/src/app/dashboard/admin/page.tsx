@@ -3,7 +3,10 @@ import { ShieldAlert } from "lucide-react";
 import { parseRoles } from "@affix/auth/permissions";
 import { requireActor } from "@/lib/dal";
 import { getAdmin } from "@/lib/data";
+import { countRequestedPayouts } from "@/lib/commerce";
+import { adminNav } from "@/lib/dashboard-nav";
 import { Chip, PageHeader, Stat, formatNumber } from "@/components/dashboard/ui";
+import { SubNav } from "@/components/dashboard/subnav";
 
 const joined = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
@@ -33,10 +36,16 @@ export default async function AdminPage() {
   }
 
   const { users, totals } = data;
+  const waiting = await countRequestedPayouts(actor);
 
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Admin" title="Platform overview" description="Every account on Affix and what it can do." />
+
+      <SubNav
+        label="Admin"
+        items={adminNav.map((i) => (i.href.endsWith("/payouts") ? { ...i, count: waiting } : i))}
+      />
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Accounts" value={formatNumber(totals.users)} />
