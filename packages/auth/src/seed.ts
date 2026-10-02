@@ -23,6 +23,8 @@ import {
   payout,
   payoutMethod,
   product,
+  productApplication,
+  sql,
   user,
   vendor,
 } from "@affix/db";
@@ -274,6 +276,165 @@ async function seedActivity() {
   }
 }
 
+/* ------------------------------------------------------------ click history */
+
+/** Small deterministic random generator, so every seed run produces the same history. */
+function random(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Pick one of `options` by weight. */
+function pick<T>(rand: () => number, options: readonly (readonly [T, number])[]) {
+  const total = options.reduce((s, [, w]) => s + w, 0);
+  let r = rand() * total;
+  for (const [value, weight] of options) {
+    r -= weight;
+    if (r <= 0) return value;
+  }
+  return options[options.length - 1][0];
+}
+
+const HISTORY_DAYS = 60;
+const clickSources = [
+  ["https://www.instagram.com/", 40],
+  ["https://www.youtube.com/", 24],
+  ["https://www.tiktok.com/", 10],
+  ["https://t.co/", 8],
+  [null, 18],
+] as const;
+const clickDevices = [
+  ["mobile", 62],
+  ["desktop", 30],
+  ["tablet", 8],
+] as const;
+const clickCountries = [
+  ["DE", 34],
+  ["FR", 12],
+  ["NL", 10],
+  ["ES", 10],
+  ["SE", 10],
+  ["IT", 9],
+  ["AT", 9],
+  ["IE", 6],
+] as const;
+// People click in the evening: weight of each hour of the day, 00 to 23.
+const hourWeights = [2, 1, 1, 1, 1, 2, 4, 7, 9, 9, 8, 9, 11, 10, 9, 9, 10, 13, 17, 20, 21, 18, 11, 5];
+
+/**
+ * Every link has a click counter; the analytics pages read individual clicks.
+ * Fill in the clicks behind each counter (spread over the last two months) so
+ * the two agree. Links whose clicks are already all there are left alone.
+ */
+async function seedClickHistory() {
+  const links = await db.query.affiliateLink.findMany();
+  const now = new Date();
+  let added = 0;
+
+  for (const [index, link] of links.entries()) {
+    const [{ existing }] = await db
+      .select({ existing: sql<number>`count(*)::int` })
+      .from(click)
+      .where(and(eq(click.linkId, link.id), sql`${click.device} <> 'bot'`));
+    const missing = link.clicks - existing;
+    if (missing <= 0) continue;
+
+    const rand = random(1000 + index);
+    // More clicks on recent days and at weekends.
+    const dayWeights = Array.from({ length: HISTORY_DAYS }, (_, daysAgo) => {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo);
+      const weekend = day.getDay() === 0 || day.getDay() === 6 ? 1.3 : 1;
+      return [daysAgo, (1.6 - daysAgo / HISTORY_DAYS) * weekend] as const;
+    });
+    const instagramOnly = link.campaign?.includes("instagram");
+
+    const rows = Array.from({ length: missing }, () => {
+      const daysAgo = pick(rand, dayWeights);
+      const hours = daysAgo === 0 ? hourWeights.slice(0, now.getHours() + 1) : hourWeights;
+      const hour = pick(rand, hours.map((w, h) => [h, w] as const));
+      const createdAt = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - daysAgo,
+        hour,
+        Math.floor(rand() * 60),
+        Math.floor(rand() * 60),
+      );
+      const device = pick(rand, clickDevices);
+      return {
+        linkId: link.id,
+        affiliateId: link.affiliateId,
+        productId: link.productId,
+        visitorId: crypto.randomUUID(),
+        device,
+        browser: device === "desktop" ? "Chrome" : rand() < 0.55 ? "Mobile Safari" : "Chrome",
+        referrer: instagramOnly ? "https://www.instagram.com/" : pick(rand, clickSources),
+        country: pick(rand, clickCountries),
+        isUnique: rand() < 0.86,
+        createdAt: createdAt > now ? now : createdAt,
+      };
+    });
+
+    for (let i = 0; i < rows.length; i += 500) await db.insert(click).values(rows.slice(i, i + 500));
+    added += rows.length;
+  }
+  if (added > 0) console.info(`Added ${added} clicks of history.`);
+}
+
+/**
+ * A campaign link for Maya, and one product that needs the vendor's approval:
+ * Lena's pilates course, with Maya already approved and Arjun waiting.
+ */
+async function seedCampaignsAndApplications() {
+  const [maya, arjun] = await Promise.all([
+    db.query.affiliate.findFirst({ where: eq(affiliate.handle, "maya") }),
+    db.query.affiliate.findFirst({ where: eq(affiliate.handle, "arjun") }),
+  ]);
+  const [sourdough, pilates] = await Promise.all([
+    db.query.product.findFirst({ where: eq(product.slug, "sourdough-at-home") }),
+    db.query.product.findFirst({ where: eq(product.slug, "pilates-foundations") }),
+  ]);
+
+  if (maya && sourdough) {
+    await db
+      .insert(affiliateLink)
+      .values({
+        affiliateId: maya.id,
+        productId: sourdough.id,
+        code: "maya/sourdough-at-home/instagram-bio",
+        campaign: "instagram-bio",
+        utmSource: "instagram",
+        utmMedium: "social",
+        clicks: 420,
+      })
+      .onConflictDoNothing({ target: affiliateLink.code });
+  }
+
+  if (maya && arjun && pilates && (await db.$count(productApplication)) === 0) {
+    await db.update(product).set({ approval: "application" }).where(eq(product.id, pilates.id));
+    await db.insert(productApplication).values([
+      {
+        productId: pilates.id,
+        affiliateId: maya.id,
+        message: "I teach beginners on Instagram and already recommend your course.",
+        status: "approved",
+        decidedAt: new Date(),
+      },
+      {
+        productId: pilates.id,
+        affiliateId: arjun.id,
+        message: "I'd like to feature it in my newsletter on healthy habits for desk workers.",
+      },
+    ]);
+  }
+}
+
 async function main() {
   console.info("Seeding Affix…");
 
@@ -324,6 +485,8 @@ async function main() {
   }
 
   await seedActivity();
+  await seedCampaignsAndApplications();
+  await seedClickHistory();
 
   const [users, products, links, orders] = await Promise.all([
     db.$count(user),

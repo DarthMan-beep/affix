@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertCircle } from "lucide-react";
 
 /*
@@ -155,12 +155,22 @@ export function Select({
   placeholder,
 }: Common & { options: { value: string; label: string }[]; placeholder?: string }) {
   const id = useId();
+  // React resets a form after its Server Action, which would clear the select
+  // when the action returns validation errors. Keep the choice in state and put
+  // it back on the element after every render.
+  const [value, setValue] = useState(defaultValue ?? "");
+  const ref = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (ref.current && ref.current.value !== value) ref.current.value = value;
+  });
   return (
     <Shell id={id} label={label} error={error} hint={hint}>
       <select
+        ref={ref}
         id={id}
         name={name}
-        defaultValue={defaultValue ?? ""}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
         required={required}
         aria-invalid={error?.length ? true : undefined}
         aria-describedby={describedBy(id, error, hint)}

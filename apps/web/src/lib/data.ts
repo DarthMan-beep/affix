@@ -32,7 +32,8 @@ export async function getSelling(actor: Actor) {
       commissionBps: product.commissionBps,
       commissionFixedCents: product.commissionFixedCents,
       status: product.status,
-      affiliates: sql<number>`count(${affiliateLink.id})::int`,
+      affiliates: sql<number>`count(distinct ${affiliateLink.affiliateId})::int`,
+      links: sql<number>`count(${affiliateLink.id})::int`,
       clicks: sql<number>`coalesce(sum(${affiliateLink.clicks}), 0)::int`,
     })
     .from(product)
@@ -60,6 +61,7 @@ export async function getProductForEdit(actor: Actor, id: string) {
       commissionFixedCents: true,
       cookieDays: true,
       refundDays: true,
+      approval: true,
       imageUrl: true,
       status: true,
     },

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@affix/auth/permissions";
-import { db, eq, product } from "@affix/db";
+import { and, db, eq, product, productApplication } from "@affix/db";
 import { requireActor } from "@/lib/dal";
 import { HIGHEST_VAT_BPS, splitCents, type CommissionTerms } from "@/lib/money";
 import { parseEuros, productSchema } from "@/lib/validation";
@@ -64,6 +64,7 @@ export async function saveProduct(_prev: FormState, formData: FormData): Promise
     ...terms,
     cookieDays: v.cookieDays,
     refundDays: v.refundDays,
+    approval: v.approval,
     imageUrl: v.image || null,
     status: v.intent === "publish" ? ("published" as const) : ("draft" as const),
   };
@@ -117,4 +118,26 @@ export async function archiveProduct(rawId: string) {
   revalidatePath("/dashboard/selling");
   revalidatePath(`/p/${existing.slug}`);
   redirect("/dashboard/selling?saved=archived");
+}
+
+/** Approve or reject an affiliate's application to promote one of the vendor's products. */
+export async function decideApplication(rawId: string, decision: "approved" | "rejected") {
+  const actor = await requireActor("/dashboard/selling/applications");
+  const id = uuid.safeParse(rawId);
+  if (!id.success) return;
+
+  const [application] = await db
+    .select({ id: productApplication.id, vendorId: product.vendorId, status: product.status })
+    .from(productApplication)
+    .innerJoin(product, eq(product.id, productApplication.productId))
+    .where(eq(productApplication.id, id.data))
+    .limit(1);
+  if (!application || !can.reviewApplication(actor, application)) return;
+
+  // Only a pending application can be decided; a second click changes nothing.
+  await db
+    .update(productApplication)
+    .set({ status: decision, decidedAt: new Date() })
+    .where(and(eq(productApplication.id, application.id), eq(productApplication.status, "pending")));
+  revalidatePath("/dashboard", "layout");
 }

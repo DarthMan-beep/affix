@@ -37,6 +37,9 @@ export const isVendor = (a: Actor) => a.vendor !== null;
 export const isAffiliate = (a: Actor) => a.affiliate !== null;
 
 type ProductRef = { vendorId: string; status: "draft" | "published" | "archived" };
+type ApprovalRef = { approval: "open" | "application" };
+/** The affiliate's application for a product, or null if they never applied. */
+type ApplicationRef = { status: "pending" | "approved" | "rejected" } | null;
 type LinkRef = { affiliateId: string };
 type PayoutMethodRef = { affiliateId: string };
 
@@ -57,6 +60,9 @@ export function isSelfReferral(
   );
 }
 
+const mayPromote = (a: Actor, p: ProductRef) =>
+  isAffiliate(a) && p.status === "published" && a.vendor?.id !== p.vendorId;
+
 export const can = {
   /** Staff-only area. */
   viewAdmin: (a: Actor) => isAdmin(a),
@@ -73,8 +79,21 @@ export const can = {
    * Promote a product: affiliates only, published products only, and never
    * your own product (no commission on self-referrals).
    */
-  promoteProduct: (a: Actor, p: ProductRef) =>
-    isAffiliate(a) && p.status === "published" && a.vendor?.id !== p.vendorId,
+  promoteProduct: (a: Actor, p: ProductRef) => mayPromote(a, p),
+
+  /**
+   * Get a link for a product: whoever may promote it, and for products that
+   * require approval only once the vendor has approved the application.
+   */
+  createLink: (a: Actor, p: ProductRef & ApprovalRef, application: ApplicationRef) =>
+    mayPromote(a, p) && (p.approval === "open" || application?.status === "approved"),
+
+  /** Apply once, and only to products that ask for an application. */
+  applyToProduct: (a: Actor, p: ProductRef & ApprovalRef, application: ApplicationRef) =>
+    mayPromote(a, p) && p.approval === "application" && application === null,
+
+  /** Applications are decided by the product's vendor (or an admin). */
+  reviewApplication: (a: Actor, p: ProductRef) => isAdmin(a) || a.vendor?.id === p.vendorId,
 
   /** Affiliate links: the owner (and admins) manage them. */
   manageLink: (a: Actor, l: LinkRef) => isAdmin(a) || a.affiliate?.id === l.affiliateId,

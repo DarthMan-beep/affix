@@ -101,3 +101,30 @@ describe("self-referrals", () => {
     assert.equal(isSelfReferral(owner, { userId: null, email: "buyer@example.com" }), false);
   });
 });
+
+describe("applications", () => {
+  const open = { ...othersPublished, approval: "open" as const };
+  const gated = { ...othersPublished, approval: "application" as const };
+
+  it("open products give a link straight away", () => {
+    assert.equal(can.createLink(affiliate, open, null), true);
+    assert.equal(can.applyToProduct(affiliate, open, null), false, "nothing to apply for");
+  });
+  it("gated products need an approved application", () => {
+    assert.equal(can.createLink(affiliate, gated, null), false);
+    assert.equal(can.createLink(affiliate, gated, { status: "pending" }), false);
+    assert.equal(can.createLink(affiliate, gated, { status: "rejected" }), false);
+    assert.equal(can.createLink(affiliate, gated, { status: "approved" }), true);
+  });
+  it("an affiliate applies once, never to their own product", () => {
+    assert.equal(can.applyToProduct(affiliate, gated, null), true);
+    assert.equal(can.applyToProduct(affiliate, gated, { status: "rejected" }), false);
+    assert.equal(can.applyToProduct(both, { ...published, approval: "application" }, null), false);
+    assert.equal(can.createLink(both, { ...published, approval: "open" }, null), false, "no self-referrals");
+  });
+  it("the product's vendor or an admin reviews applications", () => {
+    assert.equal(can.reviewApplication(vendor, published), true);
+    assert.equal(can.reviewApplication(vendor, othersPublished), false);
+    assert.equal(can.reviewApplication(admin, othersPublished), true);
+  });
+});

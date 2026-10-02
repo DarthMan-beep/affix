@@ -82,6 +82,7 @@ export const productSchema = z
     cookieDays: wholeNumber(1, 90, "Choose between 1 and 90 days."),
     refundDays: wholeNumber(0, 90, "Choose between 0 and 90 days."),
     image: z.union([z.enum(PRODUCT_IMAGES), z.literal("")]),
+    approval: z.enum(["open", "application"], { error: "Choose who can promote this product." }),
     intent: z.enum(["draft", "publish"]),
   })
   .superRefine((v, ctx) => {
@@ -127,3 +128,28 @@ export const payoutMethodSchema = z
       ctx.addIssue({ code: "custom", path: ["details"], message: "Enter the email address of the account." });
     }
   });
+
+/* ------------------------------------------------------------------- links */
+
+const utm = z
+  .string()
+  .trim()
+  .max(60, { error: "Use at most 60 characters." })
+  .regex(/^[\w .-]*$/, { error: "Use letters, numbers, spaces, dots, dashes and underscores." });
+
+export const campaignLinkSchema = z.object({
+  productId: z.uuid({ error: "Choose a product." }),
+  campaign: z
+    .string()
+    .trim()
+    .min(2, { error: "Name the campaign, e.g. instagram-bio." })
+    .max(40, { error: "Use at most 40 characters." })
+    .regex(/[a-zA-Z0-9]/, { error: "Use letters or numbers." }),
+  utmSource: utm,
+  utmMedium: utm,
+  utmCampaign: utm,
+});
+
+export const applicationSchema = z.object({
+  message: z.string().trim().max(500, { error: "Use at most 500 characters." }),
+});

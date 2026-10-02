@@ -63,7 +63,7 @@ export default async function OverviewPage({
           active={selling !== null}
           stats={[
             { label: "Products", value: formatNumber(selling?.length ?? 0) },
-            { label: "Affiliate links", value: formatNumber(sum(selling?.map((p) => p.affiliates) ?? [])) },
+            { label: "Affiliate links", value: formatNumber(sum(selling?.map((p) => p.links) ?? [])) },
             { label: "Clicks", value: formatNumber(sum(selling?.map((p) => p.clicks) ?? [])) },
           ]}
         />

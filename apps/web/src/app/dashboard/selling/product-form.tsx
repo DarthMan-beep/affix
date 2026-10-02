@@ -21,6 +21,7 @@ export type ProductFormValues = {
   commissionFixed: string;
   cookieDays: string;
   refundDays: string;
+  approval: "open" | "application";
   image: string;
 };
 
@@ -69,6 +70,7 @@ export function ProductForm({ initial, published = false }: { initial: ProductFo
   const e = state?.fieldErrors ?? {};
   const [type, setType] = useState<"percent" | "fixed">(v.commissionType);
   const [image, setImage] = useState(v.image);
+  const [approval, setApproval] = useState<"open" | "application">(v.approval);
 
   return (
     <form action={action} className="space-y-4" noValidate>
@@ -189,6 +191,41 @@ export function ProductForm({ initial, published = false }: { initial: ProductFo
             hint="Commissions stay pending this long. 0 approves them at once."
           />
         </div>
+      </Section>
+
+      <Section title="Who can promote" note="Open your product to every affiliate, or review each one before they get a link.">
+        <fieldset>
+          <legend className="sr-only">Who can promote this product</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { value: "open", label: "Any affiliate", note: "Links are available at once" },
+                { value: "application", label: "Approved affiliates", note: "You review each application" },
+              ] as const
+            ).map((o) => {
+              const active = approval === o.value;
+              return (
+                <label
+                  key={o.value}
+                  className={`relative cursor-pointer rounded-2xl border p-3.5 transition-[border-color,background-color,box-shadow] ${
+                    active ? "border-ink bg-card ring-1 ring-ink" : "border-line bg-card/60 hover:border-ink/30"
+                  } has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-spring/50`}
+                >
+                  <input
+                    type="radio"
+                    name="approval"
+                    value={o.value}
+                    checked={active}
+                    onChange={() => setApproval(o.value)}
+                    className="sr-only"
+                  />
+                  <span className="block text-[0.9rem] font-semibold text-ink">{o.label}</span>
+                  <span className="block text-[0.78rem] leading-tight text-muted">{o.note}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
       </Section>
 
       <Section title="Cover image" note="Shown on the product page and in the marketplace.">

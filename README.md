@@ -75,6 +75,17 @@ Payments and payouts are simulated: no card is charged and no money is transferr
 
 Vendors create and edit products under Selling → New product, and see every order and its split under Selling → Orders.
 
+## The affiliate workspace
+
+Everything under Promoting reads the same clicks, orders and commissions (`apps/web/src/lib/analytics.ts`):
+
+- **Overview**: earnings today, this week and this month, daily earnings, clicks and sales for the last 7, 30 or 90 days, top links and recent activity.
+- **Links**: several links per product, one per campaign (`/go/<handle>/<product>/<campaign>`), each with optional UTM tags, a QR code, pause and delete, and its own clicks, sales and earnings.
+- **Marketplace**: every product an affiliate may promote, filtered by category, commission type and minimum earnings per sale. A vendor can set a product to "Approved affiliates"; affiliates then apply, and the vendor decides under Selling → Applications.
+- **Analytics**: any date range, with breakdowns by product, traffic source, device and country, a weekday-by-hour click heatmap, and a CSV export.
+
+Charts are drawn by hand in SVG (`apps/web/src/components/dashboard/charts.tsx`), in the style of the landing page. Days are calendar days in the server's time zone.
+
 ## Changing the database
 
 1. Edit the schema in `packages/db/src/schema/`.

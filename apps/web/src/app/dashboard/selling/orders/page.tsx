@@ -1,4 +1,5 @@
 import { requireActor } from "@/lib/dal";
+import { countPendingApplications } from "@/lib/analytics";
 import { getOrders } from "@/lib/commerce";
 import { sellingNav } from "@/lib/dashboard-nav";
 import { Chip, PageHeader, Stat, formatCents, formatNumber } from "@/components/dashboard/ui";
@@ -21,6 +22,7 @@ export default async function OrdersPage() {
   }
 
   const { orders, totals } = data;
+  const pending = await countPendingApplications(actor);
 
   return (
     <div className="space-y-8">
@@ -30,7 +32,10 @@ export default async function OrdersPage() {
         description="Every sale and where its money went: VAT, the Affix fee, the affiliate's commission and your share."
       />
 
-      <SubNav label="Selling" items={sellingNav} />
+      <SubNav
+        label="Selling"
+        items={sellingNav.map((i) => (i.href.endsWith("/applications") ? { ...i, count: pending } : i))}
+      />
 
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Orders" value={formatNumber(totals.orders)} />

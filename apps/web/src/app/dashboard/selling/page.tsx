@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireActor } from "@/lib/dal";
+import { countPendingApplications } from "@/lib/analytics";
 import { getSelling } from "@/lib/data";
 import { sellingNav } from "@/lib/dashboard-nav";
 import { commissionLabel } from "@/lib/money";
@@ -23,6 +24,7 @@ export default async function SellingPage({
   const actor = await requireActor("/dashboard/selling");
   const products = await getSelling(actor);
   const { saved } = await searchParams;
+  const pending = await countPendingApplications(actor);
 
   if (!products) {
     return (
@@ -33,7 +35,7 @@ export default async function SellingPage({
     );
   }
 
-  const links = products.reduce((s, p) => s + p.affiliates, 0);
+  const links = products.reduce((s, p) => s + p.links, 0);
   const clicks = products.reduce((s, p) => s + p.clicks, 0);
 
   return (
@@ -52,7 +54,10 @@ export default async function SellingPage({
         }
       />
 
-      <SubNav label="Selling" items={sellingNav} />
+      <SubNav
+        label="Selling"
+        items={sellingNav.map((i) => (i.href.endsWith("/applications") ? { ...i, count: pending } : i))}
+      />
 
       {saved && savedNotice[saved] && <Notice tone="success" title={savedNotice[saved]} />}
 

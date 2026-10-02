@@ -86,7 +86,7 @@ export default async function PayoutsPage({
               <div className="h-full rounded-full bg-leaf" style={{ width: `${progress}%` }} />
             </div>
             <p className="mt-2.5 text-[0.88rem] text-muted">
-              {blocker ?? `You've reached the ${formatCents(minimumCents)} minimum. The whole balance is paid out.`}
+              {blocker ?? `You've reached the ${formatCents(minimumCents)} minimum. A payout withdraws your whole available balance.`}
             </p>
           </div>
           <form action={requestPayout} className="shrink-0">

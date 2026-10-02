@@ -15,6 +15,13 @@
       "when": 1790889068891,
       "tag": "0001_commerce",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790941268975,
+      "tag": "0002_campaigns_applications",
+      "breakpoints": true
     }
   ]
 }

@@ -59,7 +59,7 @@ export function CheckoutForm({
         autoComplete="email"
         defaultValue={state?.values?.email ?? defaults.email}
         error={state?.fieldErrors?.email}
-        hint="Your receipt and access go to this address."
+        hint="Your order is saved under this address."
       />
       <div onChange={(e) => e.target instanceof HTMLSelectElement && setCountry(e.target.value)}>
         <Select

@@ -68,6 +68,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           commissionFixed: p.commissionFixedCents ? euros(p.commissionFixedCents) : "",
           cookieDays: String(p.cookieDays),
           refundDays: String(p.refundDays),
+          approval: p.approval,
           image: p.imageUrl ?? "",
         }}
       />

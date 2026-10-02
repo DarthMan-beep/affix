@@ -44,6 +44,8 @@ export const affiliate = pgTable("affiliate", {
 
 export const productStatus = pgEnum("product_status", ["draft", "published", "archived"]);
 export const commissionType = pgEnum("commission_type", ["percent", "fixed"]);
+// Who may promote a product: any affiliate, or only those the vendor approved.
+export const productApproval = pgEnum("product_approval", ["open", "application"]);
 
 export const product = pgTable(
   "product",
@@ -64,6 +66,7 @@ export const product = pgTable(
     cookieDays: integer("cookie_days").default(30).notNull(),
     // Refund window: a commission stays pending this long before it can be paid out.
     refundDays: integer("refund_days").default(14).notNull(),
+    approval: productApproval("approval").default("open").notNull(),
     imageUrl: text("image_url"),
     status: productStatus("status").default("draft").notNull(),
     createdAt: createdAt(),
@@ -83,6 +86,12 @@ export const product = pgTable(
   ],
 );
 
+export const linkStatus = pgEnum("link_status", ["active", "paused"]);
+
+/*
+ * An affiliate can have several links to one product, one per campaign
+ * ("instagram-bio", "youtube-review"). The first link has no campaign.
+ */
 export const affiliateLink = pgTable(
   "affiliate_link",
   {
@@ -93,10 +102,43 @@ export const affiliateLink = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => product.id, { onDelete: "cascade" }),
-    // Public path segment: affix.to/<code>, e.g. "maya/sourdough-at-home"
+    // Public path: affix.to/<code>, e.g. "maya/sourdough-at-home" or
+    // "maya/sourdough-at-home/instagram-bio" for a campaign link.
     code: text("code").notNull().unique(),
+    campaign: text("campaign"),
+    // UTM tags added to the product page address when someone follows the link.
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    // Paused links still send visitors to the product, but don't track or earn.
+    status: linkStatus("status").default("active").notNull(),
     clicks: integer("clicks").default(0).notNull(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("affiliate_link_affiliate_product_uq").on(t.affiliateId, t.productId)],
+  (t) => [index("affiliate_link_affiliate_product_idx").on(t.affiliateId, t.productId)],
+);
+
+export const applicationStatus = pgEnum("application_status", ["pending", "approved", "rejected"]);
+
+/** An affiliate's request to promote a product that requires approval. */
+export const productApplication = pgTable(
+  "product_application",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => product.id, { onDelete: "cascade" }),
+    affiliateId: uuid("affiliate_id")
+      .notNull()
+      .references(() => affiliate.id, { onDelete: "cascade" }),
+    // How the affiliate plans to promote the product (shown to the vendor).
+    message: text("message"),
+    status: applicationStatus("status").default("pending").notNull(),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("product_application_product_affiliate_uq").on(t.productId, t.affiliateId),
+    index("product_application_status_idx").on(t.status),
+  ],
 );

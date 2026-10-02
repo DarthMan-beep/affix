@@ -50,7 +50,7 @@ export default async function OrderPage({ params }: { params: Promise<{ number: 
             Thank you, {o.buyerName.split(" ")[0]}.
           </h1>
           <p className="mt-3 text-[1.05rem] leading-relaxed text-muted">
-            Your order is confirmed. A receipt is on its way to {o.buyerEmail}.
+            Your order is confirmed and saved under {o.buyerEmail}.
           </p>
 
           <div className="mt-8 overflow-hidden rounded-[24px] bg-card ring-1 ring-line">

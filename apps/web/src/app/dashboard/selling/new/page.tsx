@@ -38,6 +38,7 @@ export default async function NewProductPage() {
           commissionFixed: "",
           cookieDays: "30",
           refundDays: "14",
+          approval: "open",
           image: "",
         }}
       />

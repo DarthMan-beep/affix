@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { account, session, user } from "./auth";
 import { click, commission, order, payout, payoutMethod } from "./commerce";
-import { affiliate, affiliateLink, product, vendor } from "./marketplace";
+import { affiliate, affiliateLink, product, productApplication, vendor } from "./marketplace";
 
 export const userRelations = relations(user, ({ many, one }) => ({
   sessions: many(session),
@@ -35,6 +35,12 @@ export const productRelations = relations(product, ({ one, many }) => ({
   vendor: one(vendor, { fields: [product.vendorId], references: [vendor.id] }),
   links: many(affiliateLink),
   orders: many(order),
+  applications: many(productApplication),
+}));
+
+export const productApplicationRelations = relations(productApplication, ({ one }) => ({
+  product: one(product, { fields: [productApplication.productId], references: [product.id] }),
+  affiliate: one(affiliate, { fields: [productApplication.affiliateId], references: [affiliate.id] }),
 }));
 
 export const affiliateLinkRelations = relations(affiliateLink, ({ one, many }) => ({

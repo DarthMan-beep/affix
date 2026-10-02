@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { auth } from "@affix/auth";
 import { can } from "@affix/auth/permissions";
-import { affiliateLink, db, eq, product } from "@affix/db";
+import { affiliateLink, and, db, eq, product, productApplication } from "@affix/db";
 import { requireActor } from "@/lib/dal";
 import { openAffiliateWorkspace, openVendorWorkspace } from "@/lib/workspaces";
 
@@ -38,10 +38,15 @@ export async function createLink(rawProductId: string) {
 
   const target = await db.query.product.findFirst({
     where: eq(product.id, id.data),
-    columns: { id: true, slug: true, vendorId: true, status: true },
+    columns: { id: true, slug: true, vendorId: true, status: true, approval: true },
   });
-  // Unknown product, unpublished, or the actor's own product: refuse quietly.
-  if (!target || !can.promoteProduct(actor, target)) return;
+  if (!target) return;
+  const application = await db.query.productApplication.findFirst({
+    where: and(eq(productApplication.productId, target.id), eq(productApplication.affiliateId, actor.affiliate.id)),
+    columns: { status: true },
+  });
+  // Unknown product, unpublished, the actor's own, or not approved yet: refuse quietly.
+  if (!can.createLink(actor, target, application ?? null)) return;
 
   await db
     .insert(affiliateLink)
@@ -51,7 +56,7 @@ export async function createLink(rawProductId: string) {
       code: `${actor.affiliate.handle}/${target.slug}`,
     })
     .onConflictDoNothing();
-  revalidatePath("/dashboard/promoting");
+  revalidatePath("/dashboard/promoting", "layout");
 }
 
 export async function resendVerification() {
