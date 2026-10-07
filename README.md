@@ -13,8 +13,8 @@ packages/
   db/             Postgres schema (Drizzle ORM), client, migrations
   auth/           Better Auth config, permission rules, seed script
 docker-compose.dev.yml   local Postgres 17 for development
-docker-compose.yml       the whole stack as deployed on RepoRun (Postgres, migrations, web)
-Dockerfile               images for that stack
+docker-compose.yml       the whole stack as deployed on RepoRun (Postgres and the web app)
+Dockerfile               the web app's image, which migrates and seeds the database on start
 stack.yml                what RepoRun exposes
 .env                     single env file for every workspace (from .env.example)
 ```
@@ -62,22 +62,23 @@ Emails (verification, password reset) are printed in the terminal running `npm r
 
 ## Deploying to RepoRun
 
-The app runs on RepoRun, the university's Docker Compose platform. RepoRun pulls the configured branch and runs `docker compose up -d --build` on `docker-compose.yml`, which starts three services:
+The app runs on RepoRun, the university's Docker Compose platform. RepoRun pulls the configured branch and runs `docker compose up -d --build` on `docker-compose.yml`, which starts two services:
 
-- **db**: Postgres 17. Data lives in the `affix-pgdata` volume, which Stop never removes.
-- **migrate**: applies pending migrations, adds the demo data, then exits. It runs on every start and leaves existing data alone.
-- **web**: the Next.js server on port 3000. It starts once `migrate` has finished. `stack.yml` exposes it behind university login (CAS).
+- **db**: Postgres 17. Its files live in `.data/postgres` inside RepoRun's checkout of the repository; Stop never removes them.
+- **web**: applies pending migrations and adds the demo data (both leave existing data alone), then serves the app on port 3000. `stack.yml` exposes it behind university login (CAS).
 
-Set these under Environment on the stack page before the first deploy:
+RepoRun's validation requires `cpus` and `mem_limit` on every service and rejects `restart`, named volumes, build targets, and host paths that aren't relative to the repository. Keep to that when changing `docker-compose.yml`.
+
+Set these under Environment on the stack page:
 
 | Key                  | Value |
 | -------------------- | ----- |
-| `POSTGRES_PASSWORD`  | Letters and digits only, since it goes into the database URL. For example, `openssl rand -hex 24`. |
+| `POSTGRES_PASSWORD`  | Letters and digits only, since it goes into the database URL. For example, `openssl rand -hex 24`. Don't change it after the first deploy: the database keeps the password it was created with. |
 | `BETTER_AUTH_SECRET` | A long random string, e.g. `openssl rand -base64 32`. Changing it signs everyone out. |
-| `BETTER_AUTH_URL`    | The endpoint URL shown on the stack page, e.g. `https://affix.example.edu`. Sign-in fails if this doesn't match the address in the browser. |
+| `BETTER_AUTH_URL`    | `https://` plus the hostname in the stack's Endpoints panel. The hostname only appears after the first deploy, so deploy once with a placeholder, then set this and press Redeploy. Sign-in fails while it doesn't match the address in the browser. |
 | `SEED_DEMO_DATA`     | Optional. `false` skips the demo accounts and sales. |
 
-Then press Validate, then Deploy. Emails are printed to the `web` service's log, in the stack's live logs. A stack that has gone to sleep wakes on the next request, which takes a few seconds while `migrate` runs.
+Then press Validate, then Deploy. Emails are printed to the `web` service's log, in the stack's live logs. A stack that has gone to sleep wakes on the next request, which takes a few seconds while the migrations run.
 
 ## Authentication and authorization
 

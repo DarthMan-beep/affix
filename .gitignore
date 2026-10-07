@@ -24,6 +24,9 @@ dist
 # turborepo
 .turbo
 
+# database files of the deployed stack (docker-compose.yml)
+.data
+
 # misc
 .DS_Store
 *.pem
