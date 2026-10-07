@@ -1,0 +1,11 @@
+# Keep local installs, build output and secrets out of the Docker build.
+**/node_modules
+**/.next
+**/.turbo
+.git
+.env
+.env.*
+!.env.example
+**/*.log
+**/*.tsbuildinfo
+coverage

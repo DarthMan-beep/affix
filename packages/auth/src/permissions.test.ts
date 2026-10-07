@@ -1,6 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { MIN_PAYOUT_CENTS, can, isSelfReferral, parseRoles, type Actor } from "./permissions";
+import {
+  MIN_PAYOUT_CENTS,
+  can,
+  isSelfReferral,
+  parseRoles,
+  referralActive,
+  referralBonusCents,
+  referralEndsAt,
+  type Actor,
+} from "./permissions";
 
 const base: Actor = {
   userId: "u1",
@@ -12,8 +21,8 @@ const base: Actor = {
   affiliate: null,
 };
 const vendor = { ...base, vendor: { id: "v1", displayName: "V", slug: "v" } };
-const affiliate = { ...base, affiliate: { id: "a1", handle: "a" } };
-const both = { ...vendor, affiliate: { id: "a1", handle: "a" } };
+const affiliate = { ...base, affiliate: { id: "a1", handle: "a", suspended: false } };
+const both = { ...vendor, affiliate: { id: "a1", handle: "a", suspended: false } };
 const admin = { ...base, roles: ["user", "admin"] as Actor["roles"] };
 
 const published = { vendorId: "v1", status: "published" as const };
@@ -126,5 +135,80 @@ describe("applications", () => {
     assert.equal(can.reviewApplication(vendor, published), true);
     assert.equal(can.reviewApplication(vendor, othersPublished), false);
     assert.equal(can.reviewApplication(admin, othersPublished), true);
+  });
+});
+
+describe("commission review and refunds", () => {
+  it("the product's vendor or an admin decides pending commissions", () => {
+    assert.equal(can.reviewCommission(vendor, { vendorId: "v1", status: "pending" }), true);
+    assert.equal(can.reviewCommission(vendor, { vendorId: "v2", status: "pending" }), false);
+    assert.equal(can.reviewCommission(affiliate, { vendorId: "v1", status: "pending" }), false);
+    assert.equal(can.reviewCommission(admin, { vendorId: "v2", status: "pending" }), true);
+  });
+  it("a decided commission can't be decided again", () => {
+    assert.equal(can.reviewCommission(vendor, { vendorId: "v1", status: "approved" }), false);
+    assert.equal(can.reviewCommission(vendor, { vendorId: "v1", status: "rejected" }), false);
+  });
+  it("orders are refunded once, by their vendor, before the commission is paid out", () => {
+    const paid = { vendorId: "v1", status: "paid" as const, commissionPaidOut: false };
+    assert.equal(can.refundOrder(vendor, paid), true);
+    assert.equal(can.refundOrder(vendor, { ...paid, vendorId: "v2" }), false);
+    assert.equal(can.refundOrder(vendor, { ...paid, status: "refunded" }), false);
+    assert.equal(can.refundOrder(vendor, { ...paid, commissionPaidOut: true }), false);
+    assert.equal(can.refundOrder(admin, { ...paid, vendorId: "v2" }), true);
+  });
+});
+
+describe("platform staff", () => {
+  const suspended = { ...base, affiliate: { id: "a1", handle: "a", suspended: true } };
+
+  it("a suspended affiliate can't promote, apply or withdraw", () => {
+    const open = { ...othersPublished, approval: "open" as const };
+    assert.equal(can.promoteProduct(suspended, othersPublished), false);
+    assert.equal(can.createLink(suspended, open, null), false);
+    assert.equal(can.requestPayout(suspended, { availableCents: MIN_PAYOUT_CENTS, hasMethod: true }), false);
+  });
+  it("the minimum payout follows the platform setting", () => {
+    assert.equal(can.requestPayout(affiliate, { availableCents: 3000, hasMethod: true, minimumCents: 2500 }), true);
+    assert.equal(can.requestPayout(affiliate, { availableCents: 3000, hasMethod: true, minimumCents: 10000 }), false);
+    assert.equal(can.requestPayout(affiliate, { availableCents: 3000, hasMethod: true }), false, "default is €50");
+  });
+  it("only admins manage affiliates and settings", () => {
+    assert.equal(can.manageAffiliates(vendor), false);
+    assert.equal(can.manageAffiliates(admin), true);
+    assert.equal(can.changeSettings(both), false);
+    assert.equal(can.changeSettings(admin), true);
+  });
+  it("an admin can ban users, but not themselves or another admin", () => {
+    assert.equal(can.banUser(admin, { userId: "u2", roles: ["user"] }), true);
+    assert.equal(can.banUser(admin, { userId: "u1", roles: ["user", "admin"] }), false, "own account");
+    assert.equal(can.banUser(admin, { userId: "u3", roles: ["user", "admin"] }), false, "another admin");
+    assert.equal(can.banUser(vendor, { userId: "u2", roles: ["user"] }), false);
+  });
+});
+
+describe("referral program", () => {
+  const invitedAt = new Date("2026-01-15T10:00:00Z");
+  it("pays the inviter a share of the invited affiliate's commission", () => {
+    assert.equal(referralBonusCents({ commissionCents: 10_000, feeCents: 1_500 }, 500), 500);
+    assert.equal(referralBonusCents({ commissionCents: 2_243, feeCents: 536 }, 500), 112, "rounded to the cent");
+  });
+  it("never pays more than the platform's fee on the sale, and nothing when switched off", () => {
+    assert.equal(referralBonusCents({ commissionCents: 10_000, feeCents: 300 }, 500), 300);
+    assert.equal(referralBonusCents({ commissionCents: 10_000, feeCents: 1_500 }, 0), 0);
+  });
+  it("runs for the set number of months from the sign-up", () => {
+    assert.equal(referralEndsAt(invitedAt, 12).toISOString(), "2027-01-15T10:00:00.000Z");
+    assert.equal(referralActive(invitedAt, 12, new Date("2027-01-15T09:59:59Z")), true);
+    assert.equal(referralActive(invitedAt, 12, new Date("2027-01-15T10:00:00Z")), false);
+    assert.equal(referralActive(invitedAt, 12, new Date("2026-01-14T10:00:00Z")), false, "not before the sign-up");
+  });
+  it("only affiliates in good standing can invite", () => {
+    assert.equal(can.inviteAffiliates(affiliate), true);
+    assert.equal(can.inviteAffiliates(vendor), false);
+    assert.equal(
+      can.inviteAffiliates({ ...base, affiliate: { id: "a1", handle: "a", suspended: true } }),
+      false,
+    );
   });
 });

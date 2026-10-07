@@ -18,7 +18,7 @@ export type Actor = {
   emailVerified: boolean;
   roles: PlatformRole[];
   vendor: { id: string; displayName: string; slug: string } | null;
-  affiliate: { id: string; handle: string } | null;
+  affiliate: { id: string; handle: string; suspended: boolean } | null;
 };
 
 const PLATFORM_ROLES: readonly PlatformRole[] = ["user", "admin"];
@@ -43,7 +43,7 @@ type ApplicationRef = { status: "pending" | "approved" | "rejected" } | null;
 type LinkRef = { affiliateId: string };
 type PayoutMethodRef = { affiliateId: string };
 
-/** Smallest balance that can be withdrawn: €50. */
+/** Smallest balance that can be withdrawn unless staff set another minimum: €50. */
 export const MIN_PAYOUT_CENTS = 50_00;
 
 /**
@@ -60,8 +60,33 @@ export function isSelfReferral(
   );
 }
 
+/** When an invited account stops earning its inviter a bonus: `months` after it signed up. */
+export function referralEndsAt(invitedAt: Date, months: number) {
+  const end = new Date(invitedAt);
+  end.setMonth(end.getMonth() + months);
+  return end;
+}
+
+/** Whether a sale made at `at` still earns the inviter a bonus. */
+export const referralActive = (invitedAt: Date, months: number, at: Date = new Date()) =>
+  at >= invitedAt && at < referralEndsAt(invitedAt, months);
+
+/**
+ * The inviter's bonus on one commission of an affiliate they invited: a share
+ * of that commission, paid by the platform out of its fee on the sale. It can
+ * therefore never be more than the fee, and it costs the vendor and the
+ * invited affiliate nothing.
+ */
+export function referralBonusCents(sale: { commissionCents: number; feeCents: number }, bonusBps: number) {
+  const wanted = Math.round((sale.commissionCents * bonusBps) / 10_000);
+  return Math.max(0, Math.min(wanted, sale.feeCents));
+}
+
+/** An affiliate in good standing: staff have not suspended them. */
+const isActiveAffiliate = (a: Actor) => a.affiliate !== null && !a.affiliate.suspended;
+
 const mayPromote = (a: Actor, p: ProductRef) =>
-  isAffiliate(a) && p.status === "published" && a.vendor?.id !== p.vendorId;
+  isActiveAffiliate(a) && p.status === "published" && a.vendor?.id !== p.vendorId;
 
 export const can = {
   /** Staff-only area. */
@@ -95,6 +120,20 @@ export const can = {
   /** Applications are decided by the product's vendor (or an admin). */
   reviewApplication: (a: Actor, p: ProductRef) => isAdmin(a) || a.vendor?.id === p.vendorId,
 
+  /**
+   * Commissions on a product are approved, rejected or held by its vendor (or
+   * an admin), and only while they are still pending.
+   */
+  reviewCommission: (a: Actor, c: { vendorId: string; status: "pending" | "approved" | "rejected" | "reversed" }) =>
+    (isAdmin(a) || a.vendor?.id === c.vendorId) && c.status === "pending",
+
+  /**
+   * Refund an order: its vendor (or an admin), once, and not after the
+   * affiliate's commission has gone into a payout.
+   */
+  refundOrder: (a: Actor, o: { vendorId: string; status: "paid" | "refunded"; commissionPaidOut: boolean }) =>
+    (isAdmin(a) || a.vendor?.id === o.vendorId) && o.status === "paid" && !o.commissionPaidOut,
+
   /** Affiliate links: the owner (and admins) manage them. */
   manageLink: (a: Actor, l: LinkRef) => isAdmin(a) || a.affiliate?.id === l.affiliateId,
 
@@ -102,12 +141,29 @@ export const can = {
   managePayoutMethod: (a: Actor, m: PayoutMethodRef) => a.affiliate?.id === m.affiliateId,
 
   /**
-   * Withdraw the available balance: affiliates with a verified email, a saved
-   * payout method, and at least the minimum payout available.
+   * Withdraw the available balance: affiliates in good standing with a verified
+   * email, a saved payout method, and at least the minimum payout available
+   * (the platform's setting, or the default).
    */
-  requestPayout: (a: Actor, b: { availableCents: number; hasMethod: boolean }) =>
-    isAffiliate(a) && a.emailVerified && b.hasMethod && b.availableCents >= MIN_PAYOUT_CENTS,
+  requestPayout: (a: Actor, b: { availableCents: number; hasMethod: boolean; minimumCents?: number }) =>
+    isActiveAffiliate(a) &&
+    a.emailVerified &&
+    b.hasMethod &&
+    b.availableCents >= (b.minimumCents ?? MIN_PAYOUT_CENTS),
+
+  /** Invite others with a referral link: affiliates in good standing. */
+  inviteAffiliates: (a: Actor) => isActiveAffiliate(a),
 
   /** Sending, completing and rejecting payouts is staff work. */
   processPayouts: (a: Actor) => isAdmin(a),
+
+  /** Suspending affiliates, notes, balance adjustments and blocklists are staff work. */
+  manageAffiliates: (a: Actor) => isAdmin(a),
+
+  /** Platform settings are changed by staff only. */
+  changeSettings: (a: Actor) => isAdmin(a),
+
+  /** Staff can ban an account, but never their own and never another admin's. */
+  banUser: (a: Actor, target: { userId: string; roles: PlatformRole[] }) =>
+    isAdmin(a) && target.userId !== a.userId && !target.roles.includes("admin"),
 } as const;

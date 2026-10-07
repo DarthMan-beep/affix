@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Pause, Play, QrCode, Store, Trash2 } from "lucide-react";
+import { Pause, Play, Store, Trash2 } from "lucide-react";
 import { requireActor } from "@/lib/dal";
 import { getLinks } from "@/lib/analytics";
 import { promotingNav } from "@/lib/dashboard-nav";
@@ -126,9 +126,6 @@ export default async function LinksPage({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap items-start justify-end gap-1.5">
-                        <a href={`/dashboard/promoting/links/${l.id}/qr`} download className={action}>
-                          <QrCode size={13} /> QR
-                        </a>
                         <form action={setLinkStatus.bind(null, l.id, l.status === "active" ? "paused" : "active")}>
                           <button type="submit" className={action}>
                             {l.status === "active" ? (

@@ -7,6 +7,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -39,11 +40,17 @@ export const affiliate = pgTable("affiliate", {
     .unique()
     .references(() => user.id, { onDelete: "cascade" }),
   handle: text("handle").notNull().unique(),
+  // Set by platform staff: a suspended affiliate's links stop tracking and they can't withdraw.
+  suspended: boolean("suspended").default(false).notNull(),
+  // Private note for platform staff. Never shown to the affiliate.
+  adminNote: text("admin_note"),
   createdAt: createdAt(),
 });
 
 export const productStatus = pgEnum("product_status", ["draft", "published", "archived"]);
 export const commissionType = pgEnum("commission_type", ["percent", "fixed"]);
+// How commissions are approved: automatically after the refund window, or by the vendor.
+export const commissionApproval = pgEnum("commission_approval", ["auto", "manual"]);
 // Who may promote a product: any affiliate, or only those the vendor approved.
 export const productApproval = pgEnum("product_approval", ["open", "application"]);
 
@@ -67,6 +74,7 @@ export const product = pgTable(
     // Refund window: a commission stays pending this long before it can be paid out.
     refundDays: integer("refund_days").default(14).notNull(),
     approval: productApproval("approval").default("open").notNull(),
+    commissionApproval: commissionApproval("commission_approval").default("auto").notNull(),
     imageUrl: text("image_url"),
     status: productStatus("status").default("draft").notNull(),
     createdAt: createdAt(),
@@ -141,4 +149,56 @@ export const productApplication = pgTable(
     uniqueIndex("product_application_product_affiliate_uq").on(t.productId, t.affiliateId),
     index("product_application_status_idx").on(t.status),
   ],
+);
+
+/**
+ * A vendor's special deal with one affiliate for one product: it replaces the
+ * product's standard commission on that affiliate's sales.
+ */
+export const affiliateRate = pgTable(
+  "affiliate_rate",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => product.id, { onDelete: "cascade" }),
+    affiliateId: uuid("affiliate_id")
+      .notNull()
+      .references(() => affiliate.id, { onDelete: "cascade" }),
+    commissionType: commissionType("commission_type").notNull(),
+    commissionBps: integer("commission_bps").default(0).notNull(),
+    commissionFixedCents: integer("commission_fixed_cents").default(0).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("affiliate_rate_product_affiliate_uq").on(t.productId, t.affiliateId),
+    check("affiliate_rate_bps_range", sql`${t.commissionBps} between 0 and 9000`),
+    check("affiliate_rate_fixed_positive", sql`${t.commissionFixedCents} >= 0`),
+  ],
+);
+
+export const creativeKind = pgEnum("creative_kind", ["banner", "text"]);
+
+/**
+ * Promotion material a vendor offers for a product: a banner (rendered by
+ * /b/<id>.png from an image, a headline and a size) or ready-made text.
+ */
+export const creative = pgTable(
+  "creative",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => product.id, { onDelete: "cascade" }),
+    kind: creativeKind("kind").notNull(),
+    title: text("title").notNull(),
+    // Banners: pixel size ("300x250"), background image and the line of text on it.
+    size: text("size"),
+    imageUrl: text("image_url"),
+    headline: text("headline"),
+    // Text creatives: the copy. "{link}" is replaced by the affiliate's own link.
+    body: text("body"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("creative_product_id_idx").on(t.productId)],
 );

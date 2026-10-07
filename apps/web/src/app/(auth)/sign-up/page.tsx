@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/dal";
+import { pendingInviter } from "@/lib/referrals";
 import { intents, type Intent } from "@/lib/validation";
 import { SignUpForm } from "./sign-up-form";
 
@@ -14,6 +15,7 @@ export default async function SignUpPage({
 }) {
   const { intent } = await searchParams;
   if (await getSession()) redirect("/dashboard");
+  const inviter = await pendingInviter();
   const initialIntent: Intent = (intents as readonly string[]).includes(intent ?? "")
     ? (intent as Intent)
     : "vendor";
@@ -33,6 +35,12 @@ export default async function SignUpPage({
           Sign in
         </Link>
       </p>
+
+      {inviter && (
+        <p className="mt-6 rounded-2xl bg-spring/20 px-4 py-3 text-[0.9rem] text-leaf-700">
+          <span className="font-semibold">{inviter.name}</span> (@{inviter.handle}) invited you to Affix.
+        </p>
+      )}
 
       <SignUpForm initialIntent={initialIntent} />
 

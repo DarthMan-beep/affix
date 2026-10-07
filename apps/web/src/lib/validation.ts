@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BANNER_SIZE_VALUES } from "./creative-options";
 import { COUNTRY_CODES } from "./money";
 import { CATEGORIES, PRODUCT_IMAGES } from "./product-options";
 
@@ -83,6 +84,7 @@ export const productSchema = z
     refundDays: wholeNumber(0, 90, "Choose between 0 and 90 days."),
     image: z.union([z.enum(PRODUCT_IMAGES), z.literal("")]),
     approval: z.enum(["open", "application"], { error: "Choose who can promote this product." }),
+    commissionApproval: z.enum(["auto", "manual"], { error: "Choose how commissions are approved." }),
     intent: z.enum(["draft", "publish"]),
   })
   .superRefine((v, ctx) => {
@@ -153,3 +155,24 @@ export const campaignLinkSchema = z.object({
 export const applicationSchema = z.object({
   message: z.string().trim().max(500, { error: "Use at most 500 characters." }),
 });
+
+/* --------------------------------------------------------------- creatives */
+
+export const creativeSchema = z
+  .object({
+    productId: z.uuid({ error: "Choose a product." }),
+    kind: z.enum(["banner", "text"]),
+    title: z.string().trim().min(2, { error: "Give it a name." }).max(60, { error: "Use at most 60 characters." }),
+    size: z.union([z.enum(BANNER_SIZE_VALUES), z.literal("")]),
+    image: z.union([z.enum(PRODUCT_IMAGES), z.literal("")]),
+    headline: z.string().trim().max(60, { error: "Use at most 60 characters." }),
+    body: z.string().trim().max(800, { error: "Use at most 800 characters." }),
+  })
+  .superRefine((v, ctx) => {
+    if (v.kind === "banner" && v.size === "") {
+      ctx.addIssue({ code: "custom", path: ["size"], message: "Choose a banner size." });
+    }
+    if (v.kind === "text" && v.body.length < 10) {
+      ctx.addIssue({ code: "custom", path: ["body"], message: "Write the text affiliates can use." });
+    }
+  });

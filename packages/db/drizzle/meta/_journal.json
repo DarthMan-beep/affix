@@ -22,6 +22,27 @@
       "when": 1790941268975,
       "tag": "0002_campaigns_applications",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791052213215,
+      "tag": "0003_vendor_tools",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791193233832,
+      "tag": "0004_admin_tools",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791299690939,
+      "tag": "0005_referrals",
+      "breakpoints": true
     }
   ]
 }

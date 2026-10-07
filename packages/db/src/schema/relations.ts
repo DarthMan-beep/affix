@@ -1,7 +1,15 @@
 import { relations } from "drizzle-orm";
 import { account, session, user } from "./auth";
-import { click, commission, order, payout, payoutMethod } from "./commerce";
-import { affiliate, affiliateLink, product, productApplication, vendor } from "./marketplace";
+import { adjustment, click, commission, order, payout, payoutMethod, referral, referralBonus } from "./commerce";
+import {
+  affiliate,
+  affiliateLink,
+  affiliateRate,
+  creative,
+  product,
+  productApplication,
+  vendor,
+} from "./marketplace";
 
 export const userRelations = relations(user, ({ many, one }) => ({
   sessions: many(session),
@@ -29,6 +37,12 @@ export const affiliateRelations = relations(affiliate, ({ one, many }) => ({
   commissions: many(commission),
   payoutMethods: many(payoutMethod),
   payouts: many(payout),
+  adjustments: many(adjustment),
+}));
+
+export const adjustmentRelations = relations(adjustment, ({ one }) => ({
+  affiliate: one(affiliate, { fields: [adjustment.affiliateId], references: [affiliate.id] }),
+  payout: one(payout, { fields: [adjustment.payoutId], references: [payout.id] }),
 }));
 
 export const productRelations = relations(product, ({ one, many }) => ({
@@ -36,6 +50,17 @@ export const productRelations = relations(product, ({ one, many }) => ({
   links: many(affiliateLink),
   orders: many(order),
   applications: many(productApplication),
+  creatives: many(creative),
+  affiliateRates: many(affiliateRate),
+}));
+
+export const affiliateRateRelations = relations(affiliateRate, ({ one }) => ({
+  product: one(product, { fields: [affiliateRate.productId], references: [product.id] }),
+  affiliate: one(affiliate, { fields: [affiliateRate.affiliateId], references: [affiliate.id] }),
+}));
+
+export const creativeRelations = relations(creative, ({ one }) => ({
+  product: one(product, { fields: [creative.productId], references: [product.id] }),
 }));
 
 export const productApplicationRelations = relations(productApplication, ({ one }) => ({
@@ -77,4 +102,17 @@ export const payoutMethodRelations = relations(payoutMethod, ({ one }) => ({
 export const payoutRelations = relations(payout, ({ one, many }) => ({
   affiliate: one(affiliate, { fields: [payout.affiliateId], references: [affiliate.id] }),
   commissions: many(commission),
+}));
+
+export const referralRelations = relations(referral, ({ one, many }) => ({
+  inviter: one(affiliate, { fields: [referral.inviterId], references: [affiliate.id] }),
+  invitedUser: one(user, { fields: [referral.invitedUserId], references: [user.id] }),
+  bonuses: many(referralBonus),
+}));
+
+export const referralBonusRelations = relations(referralBonus, ({ one }) => ({
+  referral: one(referral, { fields: [referralBonus.referralId], references: [referral.id] }),
+  inviter: one(affiliate, { fields: [referralBonus.inviterId], references: [affiliate.id] }),
+  commission: one(commission, { fields: [referralBonus.commissionId], references: [commission.id] }),
+  payout: one(payout, { fields: [referralBonus.payoutId], references: [payout.id] }),
 }));

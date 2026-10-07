@@ -1,0 +1,11 @@
+# What RepoRun exposes from docker-compose.yml.
+version: 1
+ingress:
+  - name: app
+    service: web
+    port: 3000
+    primary: true
+    access:
+      # University login (CAS) in front of the whole site. Use "public" to let
+      # anyone open it, e.g. people following an affiliate link.
+      type: cas

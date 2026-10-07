@@ -62,6 +62,7 @@ export async function getProductForEdit(actor: Actor, id: string) {
       cookieDays: true,
       refundDays: true,
       approval: true,
+      commissionApproval: true,
       imageUrl: true,
       status: true,
     },

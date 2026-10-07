@@ -1,9 +1,9 @@
 import { Check, X } from "lucide-react";
 import { requireActor } from "@/lib/dal";
 import { getApplications } from "@/lib/analytics";
-import { sellingNav } from "@/lib/dashboard-nav";
 import { Chip, PageHeader, formatNumber } from "@/components/dashboard/ui";
 import { SubNav } from "@/components/dashboard/subnav";
+import { sellingNavFor } from "@/lib/vendor";
 import { WorkspaceLocked } from "@/components/dashboard/workspace";
 import { decideApplication } from "../actions";
 
@@ -28,7 +28,6 @@ export default async function ApplicationsPage() {
     );
   }
 
-  const pending = applications.filter((a) => a.status === "pending").length;
 
   return (
     <div className="space-y-8">
@@ -38,10 +37,7 @@ export default async function ApplicationsPage() {
         description="Affiliates who asked to promote a product you set to “Approved affiliates”. Approve one and they can create links for it."
       />
 
-      <SubNav
-        label="Selling"
-        items={sellingNav.map((i) => (i.href.endsWith("/applications") ? { ...i, count: pending } : i))}
-      />
+      <SubNav label="Selling" items={await sellingNavFor(actor)} />
 
       {applications.length === 0 ? (
         <p className="rounded-[24px] bg-card px-6 py-12 text-center text-muted ring-1 ring-line">

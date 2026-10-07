@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@affix/auth/permissions";
 import {
+  adjustment,
   affiliateLink,
   and,
   commission,
@@ -17,9 +18,11 @@ import {
   payoutMethod,
   product,
   productApplication,
+  referralBonus,
 } from "@affix/db";
 import { requireActor } from "@/lib/dal";
 import { settleCommissions } from "@/lib/commerce";
+import { getSettings } from "@/lib/settings";
 import { applicationSchema, campaignLinkSchema, payoutMethodSchema } from "@/lib/validation";
 import { slugify } from "@/lib/workspaces";
 import type { FormState } from "@/app/(auth)/actions";
@@ -108,6 +111,7 @@ export async function requestPayout() {
   if (!actor.affiliate) redirect(PAGE);
   const affiliateId = actor.affiliate.id;
   await settleCommissions();
+  const { minPayoutCents } = await getSettings();
 
   const outcome = await db.transaction(async (tx) => {
     const method = await tx.query.payoutMethod.findFirst({
@@ -126,9 +130,30 @@ export async function requestPayout() {
         ),
       )
       .for("update");
-    const availableCents = available.reduce((s, c) => s + c.amountCents, 0);
+    // Staff adjustments (bonuses, corrections) are paid out with the commissions.
+    const adjustments = await tx
+      .select({ id: adjustment.id, amountCents: adjustment.amountCents })
+      .from(adjustment)
+      .where(and(eq(adjustment.affiliateId, affiliateId), isNull(adjustment.payoutId)))
+      .for("update");
+    // Referral bonuses whose commission has been approved.
+    const bonuses = await tx
+      .select({ id: referralBonus.id, amountCents: referralBonus.amountCents })
+      .from(referralBonus)
+      .innerJoin(commission, eq(commission.id, referralBonus.commissionId))
+      .where(
+        and(
+          eq(referralBonus.inviterId, affiliateId),
+          isNull(referralBonus.payoutId),
+          eq(commission.status, "approved"),
+        ),
+      )
+      .for("update", { of: referralBonus });
+    const availableCents = [...available, ...adjustments, ...bonuses].reduce((s, c) => s + c.amountCents, 0);
 
-    if (!method || !can.requestPayout(actor, { availableCents, hasMethod: true })) return "refused" as const;
+    if (!method || !can.requestPayout(actor, { availableCents, hasMethod: true, minimumCents: minPayoutCents })) {
+      return "refused" as const;
+    }
 
     const [created] = await tx
       .insert(payout)
@@ -141,10 +166,24 @@ export async function requestPayout() {
         methodDetails: method.details,
       })
       .returning({ id: payout.id });
-    await tx
-      .update(commission)
-      .set({ payoutId: created.id })
-      .where(inArray(commission.id, available.map((c) => c.id)));
+    if (available.length > 0) {
+      await tx
+        .update(commission)
+        .set({ payoutId: created.id })
+        .where(inArray(commission.id, available.map((c) => c.id)));
+    }
+    if (adjustments.length > 0) {
+      await tx
+        .update(adjustment)
+        .set({ payoutId: created.id })
+        .where(inArray(adjustment.id, adjustments.map((a) => a.id)));
+    }
+    if (bonuses.length > 0) {
+      await tx
+        .update(referralBonus)
+        .set({ payoutId: created.id })
+        .where(inArray(referralBonus.id, bonuses.map((b) => b.id)));
+    }
     return "requested" as const;
   });
 

@@ -1,15 +1,20 @@
 import { requireActor } from "@/lib/dal";
-import { countPendingApplications } from "@/lib/analytics";
 import { getOrders } from "@/lib/commerce";
-import { sellingNav } from "@/lib/dashboard-nav";
-import { Chip, PageHeader, Stat, formatCents, formatNumber } from "@/components/dashboard/ui";
+import { Chip, Notice, PageHeader, Stat, formatCents, formatNumber } from "@/components/dashboard/ui";
+import { refundOrder } from "../actions";
 import { SubNav } from "@/components/dashboard/subnav";
+import { sellingNavFor } from "@/lib/vendor";
 import { WorkspaceLocked } from "@/components/dashboard/workspace";
 
 const day = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ refund?: string }>;
+}) {
   const actor = await requireActor("/dashboard/selling/orders");
+  const { refund } = await searchParams;
   const data = await getOrders(actor);
 
   if (!data) {
@@ -22,7 +27,6 @@ export default async function OrdersPage() {
   }
 
   const { orders, totals } = data;
-  const pending = await countPendingApplications(actor);
 
   return (
     <div className="space-y-8">
@@ -32,10 +36,18 @@ export default async function OrdersPage() {
         description="Every sale and where its money went: VAT, the Affix fee, the affiliate's commission and your share."
       />
 
-      <SubNav
-        label="Selling"
-        items={sellingNav.map((i) => (i.href.endsWith("/applications") ? { ...i, count: pending } : i))}
-      />
+      <SubNav label="Selling" items={await sellingNavFor(actor)} />
+
+      {refund === "done" && (
+        <Notice tone="success" title="Order refunded">
+          It no longer counts towards your totals. If an affiliate earned a commission on it, that was reversed.
+        </Notice>
+      )}
+      {refund === "blocked" && (
+        <Notice tone="warning" title="This order can't be refunded">
+          It was refunded already, or its commission has gone into a payout.
+        </Notice>
+      )}
 
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Orders" value={formatNumber(totals.orders)} />
@@ -50,7 +62,7 @@ export default async function OrdersPage() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-[24px] bg-card ring-1 ring-line">
-          <table className="w-full min-w-[56rem] text-left text-[0.9rem]">
+          <table className="w-full min-w-[64rem] text-left text-[0.9rem]">
             <thead>
               <tr className="border-b border-line text-[0.78rem] text-muted">
                 <th className="px-6 py-3.5 font-medium">Order</th>
@@ -61,6 +73,7 @@ export default async function OrdersPage() {
                 <th className="px-4 py-3.5 text-right font-medium">Fee</th>
                 <th className="px-4 py-3.5 text-right font-medium">Affiliate</th>
                 <th className="px-6 py-3.5 text-right font-medium">You get</th>
+                <th className="px-6 py-3.5 text-right font-medium">Refund</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -85,8 +98,41 @@ export default async function OrdersPage() {
                   <td className="font-mono tabular px-4 py-4 text-right text-muted">
                     {o.affiliateCents ? formatCents(o.affiliateCents) : "—"}
                   </td>
-                  <td className="font-mono tabular px-6 py-4 text-right font-semibold text-leaf-700">
+                  <td
+                    className={`font-mono tabular px-6 py-4 text-right font-semibold ${
+                      o.status === "refunded" ? "text-muted line-through" : "text-leaf-700"
+                    }`}
+                  >
                     {formatCents(o.vendorCents)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex justify-end">
+                      {o.status === "refunded" ? (
+                        <Chip>Refunded</Chip>
+                      ) : o.canRefund ? (
+                        <details>
+                          <summary className="cursor-pointer list-none whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8rem] font-semibold text-muted ring-1 ring-inset ring-ink/15 hover:text-ink hover:ring-ink/40 [&::-webkit-details-marker]:hidden">
+                            Refund
+                          </summary>
+                          <form action={refundOrder.bind(null, o.id)} className="mt-2 w-52 rounded-2xl bg-paper p-3.5 text-left ring-1 ring-line">
+                            <p className="text-[0.82rem] leading-snug text-ink">
+                              Refund {formatCents(o.grossCents)} to {o.buyerName}?
+                              {o.affiliateHandle ? " The affiliate's commission is reversed." : ""}
+                            </p>
+                            <button
+                              type="submit"
+                              className="mt-3 inline-flex h-9 w-full items-center justify-center rounded-full bg-[#a8432b] px-4 text-[0.82rem] font-semibold text-white hover:bg-[#8f3823]"
+                            >
+                              Refund order
+                            </button>
+                          </form>
+                        </details>
+                      ) : (
+                        <span className="text-[0.78rem] text-muted-2" title="The commission is already part of a payout">
+                          Paid out
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

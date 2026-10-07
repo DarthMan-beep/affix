@@ -4,6 +4,7 @@ import { can, type Actor } from "@affix/auth/permissions";
 import {
   affiliate,
   affiliateLink,
+  affiliateRate,
   and,
   click,
   commission,
@@ -342,7 +343,7 @@ export async function getMarketplace(actor: Actor, filters: MarketplaceFilters) 
   if (!actor.affiliate) return null;
   const affiliateId = actor.affiliate.id;
 
-  const [catalog, clicksBy, salesBy, myLinks, myApplications] = await Promise.all([
+  const [catalog, clicksBy, salesBy, myLinks, myApplications, myRates] = await Promise.all([
     db
       .select({
         id: product.id,
@@ -388,8 +389,19 @@ export async function getMarketplace(actor: Actor, filters: MarketplaceFilters) 
       .select({ productId: productApplication.productId, status: productApplication.status })
       .from(productApplication)
       .where(eq(productApplication.affiliateId, affiliateId)),
+    // Custom rates vendors agreed with this affiliate.
+    db
+      .select({
+        productId: affiliateRate.productId,
+        commissionType: affiliateRate.commissionType,
+        commissionBps: affiliateRate.commissionBps,
+        commissionFixedCents: affiliateRate.commissionFixedCents,
+      })
+      .from(affiliateRate)
+      .where(eq(affiliateRate.affiliateId, affiliateId)),
   ]);
 
+  const rates = new Map(myRates.map((r) => [r.productId, r]));
   const clicks = new Map(clicksBy.map((c) => [c.productId, c.clicks]));
   const sales = new Map(salesBy.map((s) => [s.productId, s]));
   const links = new Map(myLinks.map((l) => [l.productId, l.links]));
@@ -401,6 +413,7 @@ export async function getMarketplace(actor: Actor, filters: MarketplaceFilters) 
     const productClicks = clicks.get(p.id) ?? 0;
     const productSales = sales.get(p.id);
     const myLinkCount = links.get(p.id) ?? 0;
+    const terms = rates.get(p.id) ?? p;
     const state =
       myLinkCount > 0
         ? ("promoting" as const)
@@ -418,15 +431,17 @@ export async function getMarketplace(actor: Actor, filters: MarketplaceFilters) 
       category: p.category,
       imageUrl: p.imageUrl,
       priceCents: p.priceCents,
-      commissionType: p.commissionType,
-      commissionBps: p.commissionBps,
-      commissionFixedCents: p.commissionFixedCents,
+      commissionType: terms.commissionType,
+      commissionBps: terms.commissionBps,
+      commissionFixedCents: terms.commissionFixedCents,
+      // True when the vendor gave this affiliate their own rate.
+      customRate: rates.has(p.id),
       cookieDays: p.cookieDays,
       approval: p.approval,
       createdAt: p.createdAt,
       vendorName: p.vendorName,
       // What one sale pays, so percentage and fixed commissions compare.
-      perSaleCents: splitCents(p.priceCents, REFERENCE_VAT_BPS, p).affiliateCents,
+      perSaleCents: splitCents(p.priceCents, REFERENCE_VAT_BPS, terms).affiliateCents,
       // Earnings per click and conversion rate; null until the product has traffic.
       epcCents: productClicks > 0 ? Math.round((productSales?.paidCents ?? 0) / productClicks) : null,
       conversion: productClicks > 0 ? rate(productSales?.sales ?? 0, productClicks) : null,

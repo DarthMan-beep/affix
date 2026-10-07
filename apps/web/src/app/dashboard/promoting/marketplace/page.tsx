@@ -187,7 +187,11 @@ export default async function MarketplacePage({ searchParams }: { searchParams: 
                       by {p.vendorName} · {formatCents(p.priceCents)}
                     </p>
                   </div>
-                  {p.approval === "application" && p.state !== "promoting" && <Chip>Approval needed</Chip>}
+                  {p.customRate ? (
+                    <Chip tone="green">Your rate</Chip>
+                  ) : (
+                    p.approval === "application" && p.state !== "promoting" && <Chip>Approval needed</Chip>
+                  )}
                 </div>
 
                 <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3.5">

@@ -28,7 +28,7 @@ export const getActor = cache(async (): Promise<Actor | null> => {
     }),
     db.query.affiliate.findFirst({
       where: eq(affiliate.userId, session.user.id),
-      columns: { id: true, handle: true },
+      columns: { id: true, handle: true, suspended: true },
     }),
   ]);
 

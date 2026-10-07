@@ -9,12 +9,15 @@
  */
 import { betterAuth } from "better-auth";
 import {
+  adjustment,
   affiliate,
   affiliateLink,
+  affiliateRate,
   and,
   click,
   closeDb,
   commission,
+  creative,
   db,
   eq,
   inArray,
@@ -24,11 +27,14 @@ import {
   payoutMethod,
   product,
   productApplication,
+  referral,
+  referralBonus,
   sql,
   user,
   vendor,
 } from "@affix/db";
 import { authOptions } from "./options";
+import { referralBonusCents } from "./permissions";
 
 // Scripts run outside Next.js: no cookie plugin, and no verification emails.
 const auth = betterAuth({
@@ -435,6 +441,196 @@ async function seedCampaignsAndApplications() {
   }
 }
 
+/**
+ * Vendor tools, once: banners and ready-made text for two products, a custom
+ * rate for Lena's best affiliate, and Jonas reviewing his sourdough
+ * commissions by hand (so there is something waiting for him to decide).
+ */
+async function seedVendorTools() {
+  if ((await db.$count(creative)) > 0) return;
+
+  const [sourdough, pilates, maya] = await Promise.all([
+    db.query.product.findFirst({ where: eq(product.slug, "sourdough-at-home") }),
+    db.query.product.findFirst({ where: eq(product.slug, "pilates-foundations") }),
+    db.query.affiliate.findFirst({ where: eq(affiliate.handle, "maya") }),
+  ]);
+
+  if (sourdough) {
+    await db.insert(creative).values([
+      { productId: sourdough.id, kind: "banner", title: "Weekend loaf", size: "300x250", imageUrl: sourdough.imageUrl, headline: "Bake your first loaf this weekend" },
+      { productId: sourdough.id, kind: "banner", title: "Leaderboard", size: "728x90", imageUrl: sourdough.imageUrl, headline: "Sourdough, without the guesswork" },
+      { productId: sourdough.id, kind: "banner", title: "Square for social", size: "1080x1080", imageUrl: sourdough.imageUrl, headline: null },
+      {
+        productId: sourdough.id,
+        kind: "text",
+        title: "Instagram caption",
+        body: "I finally bake sourdough that looks like the bakery's. This is the course that got me there, one fold at a time: {link}",
+      },
+    ]);
+    // Jonas checks each sourdough sale himself before the affiliate is paid.
+    await db.update(product).set({ commissionApproval: "manual" }).where(eq(product.id, sourdough.id));
+    await db
+      .update(commission)
+      .set({ manualReview: true })
+      .where(and(eq(commission.productId, sourdough.id), eq(commission.status, "pending")));
+  }
+
+  if (pilates) {
+    await db.insert(creative).values([
+      { productId: pilates.id, kind: "banner", title: "Studio skyscraper", size: "160x600", imageUrl: pilates.imageUrl, headline: "Eight weeks to a stronger core" },
+      { productId: pilates.id, kind: "banner", title: "Medium rectangle", size: "300x250", imageUrl: pilates.imageUrl, headline: null },
+      {
+        productId: pilates.id,
+        kind: "text",
+        title: "Newsletter paragraph",
+        body: "If your back complains after a day at the desk: I've been doing Lena's beginner pilates for a month, ten minutes a day, and it helps. The full course is here: {link}",
+      },
+    ]);
+    if (maya) {
+      await db
+        .insert(affiliateRate)
+        .values({ productId: pilates.id, affiliateId: maya.id, commissionType: "percent", commissionBps: 4500 })
+        .onConflictDoNothing();
+    }
+  }
+}
+
+/**
+ * Something for platform staff to find, once: an affiliate whose traffic looks
+ * wrong (most clicks from one address, repeat clicks, a purchase through his
+ * own link), and a bonus on Maya's balance.
+ */
+async function seedAdminDemo() {
+  if (await db.query.affiliate.findFirst({ where: eq(affiliate.handle, "viktor") })) return;
+
+  const userId = await ensureUser("Viktor Novak", "viktor@affix.dev");
+  const viktorId = await ensureAffiliate(userId, "viktor");
+  const playbook = await db.query.product.findFirst({ where: eq(product.slug, "the-paid-ads-playbook") });
+
+  if (playbook) {
+    const [link] = await db
+      .insert(affiliateLink)
+      .values({ affiliateId: viktorId, productId: playbook.id, code: "viktor/the-paid-ads-playbook", clicks: 180 })
+      .onConflictDoNothing({ target: affiliateLink.code })
+      .returning({ id: affiliateLink.id });
+
+    if (link) {
+      const now = Date.now();
+      const rand = random(77);
+      const at = () => new Date(now - Math.floor(rand() * 20 * DAY));
+      const base = { linkId: link.id, affiliateId: viktorId, productId: playbook.id };
+      // A made-up address fingerprint: the same one behind 150 of his 180 clicks.
+      const sameAddress = "5f1c9a7e3b2d4c6f8a0e1d2c3b4a5968";
+      const visitor = crypto.randomUUID();
+      await db.insert(click).values([
+        ...Array.from({ length: 150 }, (_, i) => ({
+          ...base,
+          visitorId: visitor,
+          ipHash: sameAddress,
+          device: "desktop" as const,
+          browser: "Chrome",
+          referrer: null,
+          country: "DE",
+          isUnique: i === 0,
+          createdAt: at(),
+        })),
+        ...Array.from({ length: 30 }, () => ({
+          ...base,
+          visitorId: crypto.randomUUID(),
+          device: "mobile" as const,
+          browser: "Mobile Safari",
+          referrer: "https://www.instagram.com/",
+          country: "DE",
+          isUnique: true,
+          createdAt: at(),
+        })),
+        ...Array.from({ length: 30 }, () => ({
+          ...base,
+          visitorId: crypto.randomUUID(),
+          device: "bot" as const,
+          browser: null,
+          referrer: null,
+          country: null,
+          isUnique: false,
+          createdAt: at(),
+        })),
+      ]);
+    }
+
+    // He bought the product through his own link: the sale counts, no commission.
+    const money = split(playbook.priceCents, 1900, null);
+    await db
+      .insert(order)
+      .values({
+        number: "AFX-DEMO0101",
+        productId: playbook.id,
+        vendorId: playbook.vendorId,
+        buyerName: "Viktor Novak",
+        buyerEmail: "viktor@affix.dev",
+        buyerCountry: "DE",
+        buyerUserId: userId,
+        ...money,
+        selfReferralAffiliateId: viktorId,
+        createdAt: new Date(Date.now() - 6 * DAY),
+      })
+      .onConflictDoNothing({ target: order.number });
+  }
+
+  const maya = await db.query.affiliate.findFirst({ where: eq(affiliate.handle, "maya") });
+  const staff = await db.query.user.findFirst({ where: eq(user.email, "admin@affix.dev") });
+  if (maya) {
+    await db.insert(adjustment).values({
+      affiliateId: maya.id,
+      amountCents: 25_00,
+      reason: "Launch bonus: first affiliate past 10 sales",
+      createdBy: staff?.id ?? null,
+    });
+  }
+}
+
+/**
+ * Referral program demo: Maya invited Arjun and Jonas three months ago, so she
+ * earns a 5% bonus on each commission they earned since.
+ */
+async function seedReferrals() {
+  const maya = await db.query.affiliate.findFirst({ where: eq(affiliate.handle, "maya") });
+  if (!maya) return;
+
+  for (const handle of ["arjun", "jonas"]) {
+    const invited = await db.query.affiliate.findFirst({ where: eq(affiliate.handle, handle) });
+    if (!invited) continue;
+    const [created] = await db
+      .insert(referral)
+      .values({ inviterId: maya.id, invitedUserId: invited.userId, createdAt: new Date(Date.now() - 90 * DAY) })
+      .onConflictDoNothing({ target: referral.invitedUserId })
+      .returning({ id: referral.id });
+    if (!created) continue;
+
+    const earned = await db
+      .select({
+        id: commission.id,
+        amountCents: commission.amountCents,
+        createdAt: commission.createdAt,
+        feeCents: order.feeCents,
+      })
+      .from(commission)
+      .innerJoin(order, eq(order.id, commission.orderId))
+      .where(and(eq(commission.affiliateId, invited.id), inArray(commission.status, ["pending", "approved"])));
+    const bonuses = earned
+      .map((c) => ({
+        referralId: created.id,
+        inviterId: maya.id,
+        commissionId: c.id,
+        amountCents: referralBonusCents({ commissionCents: c.amountCents, feeCents: c.feeCents }, 500),
+        createdAt: c.createdAt,
+      }))
+      .filter((b) => b.amountCents > 0);
+    if (bonuses.length > 0) {
+      await db.insert(referralBonus).values(bonuses).onConflictDoNothing({ target: referralBonus.commissionId });
+    }
+  }
+}
+
 async function main() {
   console.info("Seeding Affix…");
 
@@ -486,6 +682,9 @@ async function main() {
 
   await seedActivity();
   await seedCampaignsAndApplications();
+  await seedVendorTools();
+  await seedAdminDemo();
+  await seedReferrals();
   await seedClickHistory();
 
   const [users, products, links, orders] = await Promise.all([

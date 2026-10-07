@@ -5,6 +5,8 @@
  *   commission  the affiliate's share of an order, pending until the refund
  *               window has passed, then approved and eligible for payout
  *   payout      a withdrawal of approved commissions to a payout method
+ *   referral    who invited a new account, and the bonus the inviter earns
+ *               on that account's commissions
  * Payments are simulated: no card is charged and no money is transferred.
  */
 import { sql } from "drizzle-orm";
@@ -17,6 +19,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
@@ -92,6 +95,11 @@ export const order = pgTable(
     clickId: uuid("click_id").references(() => click.id, { onDelete: "set null" }),
     linkId: uuid("link_id").references(() => affiliateLink.id, { onDelete: "set null" }),
     affiliateId: uuid("affiliate_id").references(() => affiliate.id, { onDelete: "set null" }),
+    // Set when the buyer came through their own affiliate link: the sale counts,
+    // the commission doesn't, and staff can see who tried.
+    selfReferralAffiliateId: uuid("self_referral_affiliate_id").references(() => affiliate.id, {
+      onDelete: "set null",
+    }),
     status: orderStatus("status").default("paid").notNull(),
     createdAt: createdAt(),
   },
@@ -177,6 +185,10 @@ export const commission = pgTable(
     // End of the refund window: pending commissions are approved from this moment.
     availableAt: timestamp("available_at", { withTimezone: true }).notNull(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    // The vendor approves this one by hand (the product's setting when it was sold).
+    manualReview: boolean("manual_review").default(false).notNull(),
+    // Held by the vendor: stays pending and is not approved automatically.
+    onHold: boolean("on_hold").default(false).notNull(),
     // Set once the commission is part of a payout request.
     payoutId: uuid("payout_id").references(() => payout.id, { onDelete: "set null" }),
     note: text("note"),
@@ -187,5 +199,79 @@ export const commission = pgTable(
     index("commission_status_idx").on(t.status),
     index("commission_payout_id_idx").on(t.payoutId),
     check("commission_amount_positive", sql`${t.amountCents} >= 0`),
+  ],
+);
+
+/**
+ * A manual change to an affiliate's balance by platform staff: a bonus, or a
+ * correction (negative). Paid out together with the approved commissions.
+ */
+export const adjustment = pgTable(
+  "adjustment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    affiliateId: uuid("affiliate_id")
+      .notNull()
+      .references(() => affiliate.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    reason: text("reason").notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    payoutId: uuid("payout_id").references(() => payout.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("adjustment_affiliate_id_idx").on(t.affiliateId),
+    check("adjustment_amount_not_zero", sql`${t.amountCents} <> 0`),
+  ],
+);
+
+/**
+ * One account that signed up through an affiliate's invite link. The inviter
+ * earns a bonus on that account's commissions for a set period from this date.
+ */
+export const referral = pgTable(
+  "referral",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => affiliate.id, { onDelete: "cascade" }),
+    // An account is invited by one affiliate at most.
+    invitedUserId: text("invited_user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("referral_inviter_id_idx").on(t.inviterId)],
+);
+
+/**
+ * The inviter's bonus on one commission of an invited affiliate. Paid by the
+ * platform out of its fee: the order's split is not changed by it. It follows
+ * its commission (pending, approved, rejected, reversed) until it is paid out.
+ */
+export const referralBonus = pgTable(
+  "referral_bonus",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referralId: uuid("referral_id")
+      .notNull()
+      .references(() => referral.id, { onDelete: "cascade" }),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => affiliate.id, { onDelete: "cascade" }),
+    commissionId: uuid("commission_id")
+      .notNull()
+      .references(() => commission.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    payoutId: uuid("payout_id").references(() => payout.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("referral_bonus_commission_uq").on(t.commissionId),
+    index("referral_bonus_inviter_id_idx").on(t.inviterId),
+    index("referral_bonus_payout_id_idx").on(t.payoutId),
+    check("referral_bonus_amount_positive", sql`${t.amountCents} > 0`),
   ],
 );

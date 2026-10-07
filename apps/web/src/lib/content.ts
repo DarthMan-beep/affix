@@ -107,4 +107,16 @@ export const faqs: { q: string; a: string }[] = [
     q: "How does tracking work without third-party cookies?",
     a: "Every smart link is resolved on our servers, and the click is matched to the purchase with a first-party identifier. Attribution survives ad blockers, private browsing and a switch from phone to laptop, for up to 180 days.",
   },
+  {
+    q: "Can one account both sell and promote?",
+    a: "Yes. An account can open a selling workspace, a promoting workspace, or both, and switch between them from the dashboard. The one thing you can't do is earn commission on your own product or on your own purchase.",
+  },
+  {
+    q: "Do affiliates need approval to promote a product?",
+    a: "The vendor decides per product. Open products can be promoted by any affiliate straight away. For the others, an affiliate applies with a short note and gets a link once the vendor approves.",
+  },
+  {
+    q: "How does the referral program work?",
+    a: "Every affiliate has an invite link. When someone creates an account through it and starts earning, the inviter receives a bonus on top of each of their commissions for a set period. Affix pays the bonus out of its own fee, so it costs the vendor and the invited affiliate nothing.",
+  },
 ];

@@ -1,4 +1,3 @@
-import { Download } from "lucide-react";
 import { requireActor } from "@/lib/dal";
 import { getAnalytics } from "@/lib/analytics";
 import { promotingNav } from "@/lib/dashboard-nav";
@@ -67,15 +66,6 @@ export default async function AnalyticsPage({
         eyebrow={`Promoting · @${actor.affiliate!.handle}`}
         title="Analytics"
         description="Where your clicks come from, what they turn into, and when your audience is listening."
-        action={
-          <a
-            href={`${BASE}/export?${range.query}`}
-            download
-            className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-[0.9rem] font-semibold text-ink ring-1 ring-inset ring-ink/15 hover:bg-ink/[0.03] hover:ring-ink/40"
-          >
-            <Download size={16} /> Export CSV
-          </a>
-        }
       />
 
       <SubNav label="Promoting" items={promotingNav} />

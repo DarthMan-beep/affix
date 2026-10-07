@@ -30,7 +30,7 @@ export default async function EarningsPage() {
     );
   }
 
-  const { commissions, totals } = data;
+  const { commissions, adjustments, referralBonuses, totals } = data;
 
   return (
     <div className="space-y-8">
@@ -82,7 +82,18 @@ export default async function EarningsPage() {
                   <td className="whitespace-nowrap px-6 py-4">
                     <Chip tone={states[c.state].tone}>{states[c.state].label}</Chip>
                     {c.state === "pending" && (
-                      <span className="ml-2 text-[0.78rem] text-muted-2">until {shortDay.format(c.availableAt)}</span>
+                      <span className="ml-2 text-[0.78rem] text-muted-2">
+                        {c.onHold
+                          ? "on hold by the vendor"
+                          : c.manualReview
+                            ? "the vendor reviews it"
+                            : `until ${shortDay.format(c.availableAt)}`}
+                      </span>
+                    )}
+                    {(c.state === "rejected" || c.state === "reversed") && c.note && (
+                      <span className="mt-1 block max-w-[16rem] whitespace-normal text-[0.76rem] leading-snug text-muted-2">
+                        {c.note}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -90,6 +101,65 @@ export default async function EarningsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {referralBonuses.length > 0 && (
+        <section>
+          <h2 className="font-display tracking-heading text-[1.5rem] font-bold text-ink">Referral bonuses</h2>
+          <p className="mt-1.5 text-[0.9rem] text-muted">
+            Your bonus on sales by affiliates you invited. Each one follows the sale behind it: pending during the
+            refund window, then part of your balance.
+          </p>
+          <ul className="mt-5 divide-y divide-line rounded-[24px] bg-card px-6 ring-1 ring-line">
+            {referralBonuses.map((b) => (
+              <li key={b.id} className="flex items-center justify-between gap-4 py-4 text-[0.92rem]">
+                <span className="min-w-0">
+                  <span className="block text-ink">
+                    {b.invitedName} sold {b.productTitle}
+                  </span>
+                  <span className="block text-[0.78rem] text-muted-2">{day.format(b.createdAt)}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <Chip tone={states[b.state].tone}>{states[b.state].label}</Chip>
+                  <span
+                    className={`font-mono tabular font-semibold ${
+                      b.state === "rejected" || b.state === "reversed" ? "text-muted-2 line-through" : "text-leaf-700"
+                    }`}
+                  >
+                    +{formatCents(b.amountCents)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {adjustments.length > 0 && (
+        <section>
+          <h2 className="font-display tracking-heading text-[1.5rem] font-bold text-ink">Adjustments by Affix</h2>
+          <p className="mt-1.5 text-[0.9rem] text-muted">
+            Bonuses and corrections. They are part of your balance and go out with your next payout.
+          </p>
+          <ul className="mt-5 divide-y divide-line rounded-[24px] bg-card px-6 ring-1 ring-line">
+            {adjustments.map((a) => (
+              <li key={a.id} className="flex items-baseline justify-between gap-4 py-4 text-[0.92rem]">
+                <span className="min-w-0">
+                  <span className="block text-ink">{a.reason}</span>
+                  <span className="block text-[0.78rem] text-muted-2">{day.format(a.createdAt)}</span>
+                </span>
+                <span
+                  className={`font-mono tabular shrink-0 font-semibold ${
+                    a.amountCents > 0 ? "text-leaf-700" : "text-[#8f3823]"
+                  }`}
+                >
+                  {a.amountCents > 0 ? "+" : "−"}
+                  {formatCents(Math.abs(a.amountCents))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );

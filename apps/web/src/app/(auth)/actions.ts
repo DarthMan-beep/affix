@@ -11,6 +11,8 @@ import {
   signInSchema,
   signUpSchema,
 } from "@/lib/validation";
+import { recordReferral } from "@/lib/referrals";
+import { blocked } from "@/lib/settings";
 import { openAffiliateWorkspace, openVendorWorkspace } from "@/lib/workspaces";
 
 export type FormState =
@@ -77,6 +79,10 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   }
 
   const { name, email, password, intent } = parsed.data;
+  // Staff can refuse sign-ups from an email domain (Admin → Fraud).
+  if ((await blocked("email_domain")).has(email.split("@")[1] ?? "")) {
+    return { fieldErrors: { email: ["Sign-ups from this email domain aren't accepted."] }, values: keep };
+  }
   let userId: string;
   try {
     const result = await auth.api.signUpEmail({
@@ -87,6 +93,9 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   } catch (error) {
     return { error: describe(error, "We couldn't create your account. Try again."), values: keep };
   }
+
+  // Came through an affiliate's invite link: remember who invited them.
+  await recordReferral(userId);
 
   // One account can do both; open the workspaces they asked for.
   if (intent === "vendor" || intent === "both") await openVendorWorkspace(userId, name);

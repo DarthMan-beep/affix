@@ -22,6 +22,7 @@ export type ProductFormValues = {
   cookieDays: string;
   refundDays: string;
   approval: "open" | "application";
+  commissionApproval: "auto" | "manual";
   image: string;
 };
 
@@ -71,6 +72,7 @@ export function ProductForm({ initial, published = false }: { initial: ProductFo
   const [type, setType] = useState<"percent" | "fixed">(v.commissionType);
   const [image, setImage] = useState(v.image);
   const [approval, setApproval] = useState<"open" | "application">(v.approval);
+  const [review, setReview] = useState<"auto" | "manual">(v.commissionApproval);
 
   return (
     <form action={action} className="space-y-4" noValidate>
@@ -191,6 +193,41 @@ export function ProductForm({ initial, published = false }: { initial: ProductFo
             hint="Commissions stay pending this long. 0 approves them at once."
           />
         </div>
+      </Section>
+
+      <Section title="Approving commissions" note="Let commissions clear on their own when the refund window ends, or check each sale yourself first.">
+        <fieldset>
+          <legend className="sr-only">How commissions are approved</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { value: "auto", label: "Automatically", note: "When the refund window ends" },
+                { value: "manual", label: "I review each one", note: "Nothing is approved until you do" },
+              ] as const
+            ).map((o) => {
+              const active = review === o.value;
+              return (
+                <label
+                  key={o.value}
+                  className={`relative cursor-pointer rounded-2xl border p-3.5 transition-[border-color,background-color,box-shadow] ${
+                    active ? "border-ink bg-card ring-1 ring-ink" : "border-line bg-card/60 hover:border-ink/30"
+                  } has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-spring/50`}
+                >
+                  <input
+                    type="radio"
+                    name="commissionApproval"
+                    value={o.value}
+                    checked={active}
+                    onChange={() => setReview(o.value)}
+                    className="sr-only"
+                  />
+                  <span className="block text-[0.9rem] font-semibold text-ink">{o.label}</span>
+                  <span className="block text-[0.78rem] leading-tight text-muted">{o.note}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
       </Section>
 
       <Section title="Who can promote" note="Open your product to every affiliate, or review each one before they get a link.">

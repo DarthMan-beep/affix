@@ -17,7 +17,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-8">
-      <Link href="/dashboard/selling" className="inline-flex items-center gap-1.5 text-[0.88rem] font-medium text-muted hover:text-ink">
+      <Link href="/dashboard/selling/products" className="inline-flex items-center gap-1.5 text-[0.88rem] font-medium text-muted hover:text-ink">
         <ArrowLeft size={15} /> Products
       </Link>
       <PageHeader
@@ -69,6 +69,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           cookieDays: String(p.cookieDays),
           refundDays: String(p.refundDays),
           approval: p.approval,
+          commissionApproval: p.commissionApproval,
           image: p.imageUrl ?? "",
         }}
       />

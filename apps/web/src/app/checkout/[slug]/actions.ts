@@ -6,9 +6,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { isSelfReferral } from "@affix/auth/permissions";
-import { and, commission, db, eq, order, product } from "@affix/db";
+import { affiliateRate, and, commission, db, eq, order, product, referralBonus } from "@affix/db";
 import { getActor } from "@/lib/dal";
 import { countryByCode, splitCents } from "@/lib/money";
+import { getSettings } from "@/lib/settings";
+import { referralBonusFor } from "@/lib/referrals";
 import { VISITOR_COOKIE, findAttribution, isVisitorId } from "@/lib/tracking";
 import { checkoutSchema } from "@/lib/validation";
 import type { FormState } from "@/app/(auth)/actions";
@@ -41,9 +43,12 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
   const vat = countryByCode(country)!;
   const buyer = await getActor();
 
-  // Last affiliate link this visitor clicked for this product, within its cookie window.
+  // The affiliate link this visitor clicked for this product within its cookie
+  // window: the last or the first one, whichever the platform is set to.
   const visitorId = (await cookies()).get(VISITOR_COOKIE)?.value;
-  let attribution = isVisitorId(visitorId) ? await findAttribution(visitorId, p.id, p.cookieDays) : null;
+  const { attribution: model } = await getSettings();
+  let attribution = isVisitorId(visitorId) ? await findAttribution(visitorId, p.id, p.cookieDays, model) : null;
+  let selfReferralAffiliateId: string | null = null;
   if (
     attribution &&
     isSelfReferral(
@@ -51,12 +56,30 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
       { userId: buyer?.userId ?? null, email },
     )
   ) {
-    attribution = null; // no commission on your own purchases
+    // No commission on your own purchases; the attempt is kept for staff to see.
+    selfReferralAffiliateId = attribution.affiliateId;
+    attribution = null;
   }
 
-  const split = splitCents(p.priceCents, vat.vatBps, attribution ? p : null);
+  // A custom rate the vendor agreed with this affiliate replaces the product's standard commission.
+  const customRate = attribution
+    ? await db.query.affiliateRate.findFirst({
+        where: and(eq(affiliateRate.productId, p.id), eq(affiliateRate.affiliateId, attribution.affiliateId)),
+      })
+    : undefined;
+  const split = splitCents(p.priceCents, vat.vatBps, attribution ? (customRate ?? p) : null);
+  const manual = p.commissionApproval === "manual";
   const number = reference("AFX");
   const now = new Date();
+  // If another affiliate invited this one, they earn a bonus on the commission, out of Affix's fee.
+  const bonus =
+    attribution && split.affiliateCents > 0
+      ? await referralBonusFor(
+          { userId: attribution.affiliateUserId },
+          { commissionCents: split.affiliateCents, feeCents: split.feeCents },
+          now,
+        )
+      : null;
 
   await db.transaction(async (tx) => {
     const [created] = await tx
@@ -79,21 +102,28 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
         clickId: attribution?.clickId ?? null,
         linkId: attribution?.linkId ?? null,
         affiliateId: attribution?.affiliateId ?? null,
+        selfReferralAffiliateId,
       })
       .returning({ id: order.id });
 
     if (attribution && split.affiliateCents > 0) {
       const availableAt = new Date(now.getTime() + p.refundDays * 24 * 60 * 60 * 1000);
-      await tx.insert(commission).values({
-        orderId: created.id,
-        affiliateId: attribution.affiliateId,
-        productId: p.id,
-        amountCents: split.affiliateCents,
-        // Held for the refund window; a window of 0 days approves at once.
-        status: p.refundDays === 0 ? "approved" : "pending",
-        availableAt,
-        approvedAt: p.refundDays === 0 ? now : null,
-      });
+      const [earned] = await tx
+        .insert(commission)
+        .values({
+          orderId: created.id,
+          affiliateId: attribution.affiliateId,
+          productId: p.id,
+          amountCents: split.affiliateCents,
+          // Held for the refund window; a window of 0 days approves at once,
+          // unless the vendor reviews this product's commissions by hand.
+          status: p.refundDays === 0 && !manual ? "approved" : "pending",
+          availableAt,
+          approvedAt: p.refundDays === 0 && !manual ? now : null,
+          manualReview: manual,
+        })
+        .returning({ id: commission.id });
+      if (bonus) await tx.insert(referralBonus).values({ ...bonus, commissionId: earned.id });
     }
   });
 

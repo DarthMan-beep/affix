@@ -1,6 +1,7 @@
 import { ArrowRight, Landmark, Mail } from "lucide-react";
 import { requireActor } from "@/lib/dal";
 import { getPayouts, methodLabel } from "@/lib/commerce";
+import { scheduleLabel } from "@/lib/settings";
 import { promotingNav } from "@/lib/dashboard-nav";
 import { Chip, Notice, PageHeader, Panel, formatCents } from "@/components/dashboard/ui";
 import { SubNav } from "@/components/dashboard/subnav";
@@ -35,11 +36,13 @@ export default async function PayoutsPage({
     );
   }
 
-  const { totals, minimumCents, canRequest, methods, history } = data;
+  const { totals, minimumCents, payoutSchedule, suspended, canRequest, methods, history } = data;
   const progress = Math.min(100, Math.round((totals.availableCents / minimumCents) * 100));
   const missing = minimumCents - totals.availableCents;
-  const blocker = !actor.emailVerified
-    ? "Verify your email address before your first payout."
+  const blocker = suspended
+    ? "Your account is suspended, so payouts are paused. Contact Affix support."
+    : !actor.emailVerified
+      ? "Verify your email address before your first payout."
     : methods.length === 0
       ? "Add a payout method below to withdraw."
       : missing > 0
@@ -51,7 +54,7 @@ export default async function PayoutsPage({
       <PageHeader
         eyebrow={`Promoting · @${actor.affiliate!.handle}`}
         title="Payouts"
-        description="Withdraw your available balance once it reaches the minimum."
+        description={`Withdraw your available balance once it reaches the minimum. Affix processes payout requests ${scheduleLabel[payoutSchedule]}.`}
       />
 
       <SubNav label="Promoting" items={promotingNav} />
